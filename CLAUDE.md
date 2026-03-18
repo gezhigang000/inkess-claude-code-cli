@@ -70,23 +70,43 @@ npx electron-rebuild -f -w node-pty
 
 脚本自动完成以下全部步骤：
 
-1. **Bump 版本号** — `package.json` 自动 patch +1（或指定版本）
-2. **Build** — `electron-vite build`
-3. **打包 Mac DMG** — arm64 + x64，使用本地 dmgbuild 缓存避免下载失败
-4. **上传 Mac 到 OSS** — DMG + blockmap + latest-mac.yml
-5. **更新 Homebrew Cask** — 自动算 sha256，更新 `~/work-inkess/homebrew-tap/` 并推送
-6. **Commit + Tag + Push** — 推送到 GitHub，触发 Actions
-7. **GitHub Actions 自动** — 构建 Windows exe → 上传 GitHub Release + OSS
+1. **检查前置条件** — node/npx/gh/python3/oss2 是否可用
+2. **Build** — `electron-vite build`（用当前版本号构建，失败不影响版本）
+3. **Bump 版本号** — 构建成功后才修改 `package.json`（失败自动回滚）
+4. **打包 Mac DMG** — arm64 + x64，使用本地 dmgbuild 缓存避免下载失败
+5. **上传 Mac 到 OSS** — DMG + blockmap + latest-mac.yml + `latest/` 永久链接
+6. **更新 meta.json** — OSS 上的版本元数据
+7. **更新 Homebrew Cask** — 自动算 sha256，更新 `~/work-inkess/homebrew-tap/` 并推送
+8. **Commit + Tag + Push** — 推送到 GitHub，触发 Actions
+9. **GitHub Actions 自动** — 构建 Windows exe → 上传 GitHub Release + OSS + `latest/`
 
 ### 发布产物分发渠道
 
-| 平台 | 渠道 | URL |
-|------|------|-----|
-| Mac arm64 | OSS CDN | `https://download.starapp.net/app-releases/Inkess Claude Code CLI-{ver}-arm64.dmg` |
-| Mac x64 | OSS CDN | `https://download.starapp.net/app-releases/Inkess Claude Code CLI-{ver}.dmg` |
-| Mac | Homebrew | `brew tap gezhigang000/tap && brew install --cask inkess-claude-code-cli` |
-| Windows | OSS CDN | `https://download.starapp.net/app-releases/Inkess Claude Code CLI Setup {ver}.exe` |
-| 全平台 | GitHub Release | `https://github.com/gezhigang000/inkess-claude-code-cli/releases` |
+| 平台 | 永久下载链接（latest/） | 版本化链接 |
+|------|------------------------|-----------|
+| Mac arm64 | `https://download.starapp.net/app-releases/latest/macos-arm64.dmg` | `app-releases/Inkess Claude Code CLI-{ver}-arm64.dmg` |
+| Mac x64 | `https://download.starapp.net/app-releases/latest/macos-x64.dmg` | `app-releases/Inkess Claude Code CLI-{ver}.dmg` |
+| Windows | `https://download.starapp.net/app-releases/latest/windows-x64.exe` | `app-releases/Inkess Claude Code CLI Setup {ver}.exe` |
+| Mac | `brew tap gezhigang000/tap && brew install --cask inkess-claude-code-cli` | — |
+| 全平台 | `https://github.com/gezhigang000/inkess-claude-code-cli/releases` | — |
+| 版本元数据 | `https://download.starapp.net/app-releases/meta.json` | — |
+
+### OSS 文件结构
+
+```
+inkess-install-file/app-releases/
+├── latest/                          # 永久下载链接（copy_object 覆盖）
+│   ├── macos-arm64.dmg
+│   ├── macos-x64.dmg
+│   └── windows-x64.exe
+├── meta.json                        # 版本元数据
+├── latest-mac.yml                   # electron-updater Mac 更新检查
+├── latest.yml                       # electron-updater Windows 更新检查
+├── Inkess Claude Code CLI-0.2.2-arm64.dmg
+├── Inkess Claude Code CLI-0.2.2.dmg
+├── Inkess Claude Code CLI Setup 0.2.2.exe
+└── ...（历史版本文件保留）
+```
 
 ### 应用自动更新
 
@@ -102,14 +122,10 @@ npx electron-rebuild -f -w node-pty
 - Apple Developer ID 证书在 Keychain 中（Mac 签名用）
 - GitHub repo secrets 已配置 `OSS_ACCESS_KEY_ID` + `OSS_ACCESS_KEY_SECRET`（Windows CI 用）
 
-### 发布后需手动更新
-
-- `inkess-platform` 文档中的下载链接版本号（`code/content/docs/setup/inkess-claude-code-cli.md`）
-
 ## Architecture Notes
 
 - **CLI 二进制管理**：从 `inkess-install-file.oss-cn-beijing.aliyuncs.com/cli-mirror` 下载 Claude Code CLI 二进制，存放在 `~/Library/Application Support/inkess-claude-code/cli/claude`
-I 代理**：`ANTHROPIC_BASE_URL` 设为 `https://llm.starapp.net/api/llm`，通过 Inkess 平台代理转发到上游
+- **LLM API 代理**：`ANTHROPIC_BASE_URL` 设为 `https://llm.starapp.net/api/llm`，通过 Inkess 平台代理转发到上游
 - **认证**：`ANTHROPIC_AUTH_TOKEN` 通过 PTY 环境变量注入，用户无需手动配置
 - **node-pty 注意事项**：native module，`npm install` 后必须 `electron-rebuild` 确保架构匹配（arm64 Mac 上尤其重要）
 - **DMG 构建**：npmmirror 的 dmgbuild 包经常 404，release 脚本使用 `CUSTOM_DMGBUILD_PATH` 指向本地缓存绕过
