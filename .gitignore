@@ -7,3 +7,4 @@ dist/
 *.AppImage
 .DS_Store
 *.log
+scripts/.env
