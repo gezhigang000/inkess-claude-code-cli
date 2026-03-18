@@ -62,11 +62,17 @@ export class PtyManager {
   }
 
   write(id: string, data: string): void {
-    this.sessions.get(id)?.process.write(data)
+    const session = this.sessions.get(id)
+    if (!session) {
+      log.warn(`PTY write to dead session: ${id}`)
+      return
+    }
+    session.process.write(data)
   }
 
   resize(id: string, cols: number, rows: number): void {
-    this.sessions.get(id)?.process.resize(cols, rows)
+    if (cols < 1 || rows < 1 || !Number.isFinite(cols) || !Number.isFinite(rows)) return
+    this.sessions.get(id)?.process.resize(Math.floor(cols), Math.floor(rows))
   }
 
   kill(id: string): void {

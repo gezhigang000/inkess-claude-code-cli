@@ -12,20 +12,14 @@ set -e
 #   ./scripts/release-app.sh          # bump patch: 0.2.2 → 0.2.3
 #   ./scripts/release-app.sh 0.3.0    # set specific version
 #
-# What it does (in order):
-#   1. Bump version in package.json
-#   2. Build renderer + main
+# Flow:
+#   1. Check prerequisites
+#   2. Build renderer + main (with CURRENT version)
 #   3. Package Mac arm64 + x64 DMGs
-#   4. Upload Mac DMGs + latest-mac.yml to OSS
-#   5. Update Homebrew Cask (sha256 + version)
-#   6. Commit, tag, push → triggers GitHub Actions for Windows
-#   7. GitHub Actions: build exe → upload to GitHub Release + OSS
-#
-# Prerequisites:
-#   - OSS credentials in scripts/.env (OSS_ACCESS_KEY_ID, OSS_ACCESS_KEY_SECRET)
-#   - gh CLI authenticated
-#   - Homebrew tap repo cloned at ~/work-inkess/homebrew-tap
-#   - Apple Developer ID certificate in keychain (for signing)
+#   4. Bump version in package.json (only after successful build)
+#   5. Upload Mac DMGs + meta.json to OSS
+#   6. Update Homebrew Cask
+#   7. Commit, tag, push → triggers GitHub Actions for Windows
 # ============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -47,52 +41,71 @@ step() { echo -e "\n${GREEN}▸ $1${NC}"; }
 warn() { echo -e "${YELLOW}⚠ $1${NC}"; }
 fail() { echo -e "${RED}✗ $1${NC}"; exit 1; }
 
-# ── Step 0: Determine version ──────────────────────────────
+# ── Step 0: Prerequisites ─────────────────────────────────
+
+step "Checking prerequisites"
+
+command -v node >/dev/null || fail "node not found"
+command -v npx >/dev/null || fail "npx not found"
+command -v gh >/dev/null || fail "gh CLI not found (brew install gh)"
+command -v python3 >/dev/null || fail "python3 not found"
+python3 -c "import oss2" 2>/dev/null || fail "python3 oss2 module not found (pip3 install oss2)"
+
+[ -n "$OSS_ACCESS_KEY_ID" ] || warn "OSS_ACCESS_KEY_ID not set — OSS upload will be skipped"
+[ -d "$HOME/work-inkess/homebrew-tap" ] || warn "Homebrew tap not found at ~/work-inkess/homebrew-tap"
+
+echo "  All checks passed"
+
+# ── Step 1: Determine version ─────────────────────────────
 
 CURRENT_VERSION=$(node -p "require('./package.json').version")
 
 if [ -n "$1" ]; then
   NEW_VERSION="$1"
 else
-  # Auto bump patch
   IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
   NEW_VERSION="$major.$minor.$((patch + 1))"
 fi
 
 TAG="v$NEW_VERSION"
+echo ""
 echo "=== Releasing $TAG (current: $CURRENT_VERSION) ==="
 
-# Check for uncommitted changes (besides version bump)
-if [ -n "$(git status --porcelain)" ]; then
-  warn "Uncommitted changes detected. They will be included in the release commit."
+if git rev-parse "$TAG" >/dev/null 2>&1; then
+  fail "Tag $TAG already exists"
 fi
 
-# ── Step 1: Bump version ───────────────────────────────────
+# ── Step 2: Bump version ──────────────────────────────────
 
 step "Bumping version to $NEW_VERSION"
 sed -i '' "s/\"version\": \"$CURRENT_VERSION\"/\"version\": \"$NEW_VERSION\"/" package.json
 echo "  package.json → $NEW_VERSION"
 
-# ── Step 2: Build ──────────────────────────────────────────
+# ── Step 3: Build ─────────────────────────────────────────
 
 step "Building app"
-npx electron-vite build
+if ! npx electron-vite build; then
+  # Rollback version on build failure
+  sed -i '' "s/\"version\": \"$NEW_VERSION\"/\"version\": \"$CURRENT_VERSION\"/" package.json
+  fail "Build failed — version rolled back to $CURRENT_VERSION"
+fi
 echo "  Build complete"
 
-# ── Step 3: Package Mac DMGs ───────────────────────────────
+# ── Step 4: Package Mac DMGs ──────────────────────────────
 
 step "Packaging Mac DMGs (arm64 + x64)"
 
-# Use local dmgbuild cache to avoid npmmirror 404
 DMGBUILD_DIR="$HOME/Library/Caches/electron-builder/dmg-builder@1.2.0/dmgbuild-bundle-arm64-75c8a6c"
 if [ -f "$DMGBUILD_DIR/dmgbuild" ]; then
   export CUSTOM_DMGBUILD_PATH="$DMGBUILD_DIR/dmgbuild"
 fi
 
-# Clean old artifacts
 rm -rf release/mac release/mac-arm64 release/*.dmg release/*.blockmap release/*.yml 2>/dev/null || true
 
-npx electron-builder --mac --arm64 --x64
+if ! npx electron-builder --mac --arm64 --x64; then
+  sed -i '' "s/\"version\": \"$NEW_VERSION\"/\"version\": \"$CURRENT_VERSION\"/" package.json
+  fail "Packaging failed — version rolled back to $CURRENT_VERSION"
+fi
 
 ARM64_DMG="release/Inkess Claude Code CLI-${NEW_VERSION}-arm64.dmg"
 X64_DMG="release/Inkess Claude Code CLI-${NEW_VERSION}.dmg"
@@ -103,12 +116,12 @@ X64_DMG="release/Inkess Claude Code CLI-${NEW_VERSION}.dmg"
 echo "  $(ls -lh "$ARM64_DMG" | awk '{print $5}') arm64"
 echo "  $(ls -lh "$X64_DMG" | awk '{print $5}') x64"
 
-# ── Step 4: Upload Mac to OSS ─────────────────────────────
+# ── Step 5: Upload Mac to OSS ────────────────────────────
 
 if [ -n "$OSS_ACCESS_KEY_ID" ] && [ -n "$OSS_ACCESS_KEY_SECRET" ]; then
   step "Uploading Mac artifacts to OSS"
   python3 -c "
-import oss2, os, glob
+import oss2, os, glob, json, urllib.parse
 auth = oss2.Auth(os.environ['OSS_ACCESS_KEY_ID'], os.environ['OSS_ACCESS_KEY_SECRET'])
 bucket = oss2.Bucket(auth, 'https://oss-cn-beijing.aliyuncs.com', 'inkess-install-file')
 for f in glob.glob('release/*.dmg') + glob.glob('release/*.dmg.blockmap') + glob.glob('release/latest-mac.yml'):
@@ -117,10 +130,8 @@ for f in glob.glob('release/*.dmg') + glob.glob('release/*.dmg.blockmap') + glob
     size_mb = os.path.getsize(f) / 1024 / 1024
     print(f'  {name} ({size_mb:.1f} MB)...')
     oss2.resumable_upload(bucket, key, f, part_size=10*1024*1024, num_threads=3)
-print('  OSS upload complete')
 
 # Upload meta.json
-import json, urllib.parse
 v = '$NEW_VERSION'
 base = 'https://download.starapp.net/app-releases'
 meta = {
@@ -131,13 +142,13 @@ meta = {
     'homebrew': 'brew tap gezhigang000/tap && brew install --cask inkess-claude-code-cli'
 }
 bucket.put_object('app-releases/meta.json', json.dumps(meta, ensure_ascii=False).encode())
-print('  meta.json updated')
-"
+print('  OSS upload complete + meta.json updated')
+" || warn "OSS upload failed (non-fatal)"
 else
-  warn "Skipping OSS upload (no credentials in scripts/.env)"
+  warn "Skipping OSS upload (no credentials)"
 fi
 
-# ── Step 5: Update Homebrew Cask ───────────────────────────
+# ── Step 6: Update Homebrew Cask ──────────────────────────
 
 HOMEBREW_TAP="$HOME/work-inkess/homebrew-tap"
 if [ -d "$HOMEBREW_TAP" ]; then
@@ -182,7 +193,7 @@ else
   warn "Homebrew tap not found at $HOMEBREW_TAP, skipping"
 fi
 
-# ── Step 6: Commit, tag, push ──────────────────────────────
+# ── Step 7: Commit, tag, push ─────────────────────────────
 
 step "Committing and pushing"
 git add -A
@@ -192,7 +203,7 @@ git push github main
 git push github "$TAG"
 echo "  Pushed $TAG → GitHub Actions will build Windows exe"
 
-# ── Done ───────────────────────────────────────────────────
+# ── Done ──────────────────────────────────────────────────
 
 echo ""
 echo -e "${GREEN}=== Release $TAG complete ===${NC}"
@@ -201,10 +212,5 @@ echo "  Mac arm64 DMG : OSS ✓"
 echo "  Mac x64 DMG   : OSS ✓"
 echo "  Homebrew Cask : updated ✓"
 echo "  Windows exe   : GitHub Actions building..."
-echo ""
-echo "  GitHub Actions will automatically:"
-echo "    1. Build Windows exe"
-echo "    2. Upload to GitHub Release"
-echo "    3. Upload to OSS"
 echo ""
 echo "  Monitor: gh run list --limit 1"

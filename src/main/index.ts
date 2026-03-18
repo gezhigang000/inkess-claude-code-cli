@@ -15,7 +15,9 @@ const ptyManager = new PtyManager()
 const cliManager = new CliManager()
 const authManager = new AuthManager()
 const analytics = new Analytics()
-analytics.setTokenGetter(() => authManager.getToken())
+analytics.setTokenGetter(() => {
+  try { return authManager.getToken() } catch { return null }
+})
 
 function createWindow(): void {
   // Set dock/taskbar icon (especially needed in dev mode)
@@ -39,6 +41,7 @@ function createWindow(): void {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      // sandbox must be false: node-pty requires Node.js APIs in preload
       sandbox: false
     }
   })
@@ -130,6 +133,7 @@ ipcMain.handle('cli:install', async () => {
     analytics.track('cli_install')
     return { success: true }
   } catch (err) {
+    log.error('CLI install failed:', err)
     return { success: false, error: (err as Error).message }
   }
 })
@@ -146,6 +150,7 @@ ipcMain.handle('cli:update', async () => {
     analytics.track('cli_update')
     return { success: true }
   } catch (err) {
+    log.error('CLI update failed:', err)
     return { success: false, error: (err as Error).message }
   }
 })
@@ -194,15 +199,24 @@ ipcMain.on('pty:kill', (_event, { id }: { id: string }) => {
 
 // IPC: Shell actions
 ipcMain.handle('shell:openExternal', (_event, url: string) => {
+  if (!/^https?:\/\//i.test(url)) {
+    log.warn(`Blocked openExternal with non-http URL: ${url}`)
+    return
+  }
   return shell.openExternal(url)
 })
 
 ipcMain.handle('shell:openPath', (_event, path: string) => {
+  if (path.includes('..')) {
+    log.warn(`Blocked openPath with path traversal: ${path}`)
+    return
+  }
   return shell.openPath(path)
 })
 
 ipcMain.handle('shell:selectDirectory', async () => {
-  const result = await dialog.showOpenDialog(mainWindow!, {
+  if (!mainWindow) return null
+  const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openDirectory']
   })
   return result.canceled ? null : result.filePaths[0]
@@ -317,7 +331,8 @@ function setupMenu(): void {
           label: 'Open Folder...',
           accelerator: `${mod}+O`,
           click: async () => {
-            const result = await dialog.showOpenDialog(mainWindow!, { properties: ['openDirectory'] })
+            if (!mainWindow) return
+            const result = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory'] })
             if (!result.canceled && result.filePaths[0]) {
               mainWindow?.webContents.send('app:openFolder', result.filePaths[0])
             }

@@ -25,8 +25,9 @@
     },
     "files": [
       "out/**/*",
-      "node_modules/**/*",
-      "!node_modules/.cache"
+      "node_modules/node-pty/**/*",
+      "node_modules/electron-log/**/*",
+      "node_modules/electron-updater/**/*"
     ],
     "mac": {
       "icon": "resources/icon.icns",
@@ -75,13 +76,6 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true
-    },
-    "linux": {
-      "icon": "resources/icon-256.png",
-      "target": [
-        "AppImage"
-      ],
-      "category": "Development"
     },
     "publish": {
       "provider": "generic",
