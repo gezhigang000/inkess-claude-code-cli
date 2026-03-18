@@ -67,10 +67,13 @@ export class CliManager {
     let version: string | null = null
     if (installed) {
       try {
-        version = execSync(`"${this.binaryPath}" --version`, {
+        const raw = execSync(`"${this.binaryPath}" --version`, {
           timeout: 5000,
           encoding: 'utf-8'
         }).trim()
+        // "2.1.78 (Claude Code)" → "2.1.78"
+        const match = raw.match(/^[\d.]+/)
+        version = match ? match[0] : raw
       } catch {
         // binary exists but can't get version
       }

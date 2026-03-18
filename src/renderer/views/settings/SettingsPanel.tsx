@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuthStore } from '../../stores/auth'
 import { useSettingsStore } from '../../stores/settings'
+import { useI18n } from '../../i18n'
 
 interface SettingsPanelProps {
   onClose: () => void
@@ -9,8 +10,9 @@ interface SettingsPanelProps {
 
 export function SettingsPanel({ onClose, onLogout }: SettingsPanelProps) {
   const { user, balance, setBalance } = useAuthStore()
-  const [activeSection, setActiveSection] = useState<'account' | 'appearance' | 'ide' | 'network'>('account')
-  const { fontSize, ideChoice, proxyUrl, setFontSize, setIdeChoice, setProxyUrl } = useSettingsStore()
+  const [activeSection, setActiveSection] = useState<'account' | 'appearance' | 'language'>('account')
+  const { fontSize, language, theme, setFontSize, setLanguage, setTheme } = useSettingsStore()
+  const { t } = useI18n()
 
   useEffect(() => {
     window.api.auth.getBalance().then(({ balance: b }) => {
@@ -28,23 +30,22 @@ export function SettingsPanel({ onClose, onLogout }: SettingsPanelProps) {
   }, [onClose])
 
   const sections = [
-    { id: 'account' as const, label: 'Account', icon: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2' },
-    { id: 'appearance' as const, label: 'Appearance', icon: 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z' },
-    { id: 'ide' as const, label: 'IDE', icon: 'M16 18l6-6-6-6M8 6l-6 6 6 6' },
-    { id: 'network' as const, label: 'Network', icon: 'M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9' }
+    { id: 'account' as const, label: t('settings.account'), icon: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2' },
+    { id: 'appearance' as const, label: t('settings.appearance'), icon: 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z' },
+    { id: 'language' as const, label: t('settings.language'), icon: 'M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129' },
   ]
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex' }}>
       <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)' }} />
       <div style={{
-        position: 'relative', margin: 'auto', width: 640, maxHeight: '80vh',
+        position: 'relative', margin: 'auto', width: 640, height: 480,
         background: 'var(--bg-primary)', borderRadius: 12, border: '1px solid var(--border)',
         display: 'flex', overflow: 'hidden'
       }}>
         {/* Sidebar */}
         <div style={{ width: 180, background: 'var(--bg-secondary)', padding: '16px 8px', borderRight: '1px solid var(--border)', flexShrink: 0 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, padding: '0 8px', marginBottom: 8 }}>Settings</div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, padding: '0 8px', marginBottom: 8 }}>{t('settings.title')}</div>
           {sections.map(s => (
             <div
               key={s.id}
@@ -75,13 +76,10 @@ export function SettingsPanel({ onClose, onLogout }: SettingsPanelProps) {
             <AccountSection user={user} balance={balance} onLogout={onLogout} />
           )}
           {activeSection === 'appearance' && (
-            <AppearanceSection fontSize={fontSize} onFontSizeChange={setFontSize} />
+            <AppearanceSection fontSize={fontSize} onFontSizeChange={setFontSize} theme={theme} onThemeChange={setTheme} />
           )}
-          {activeSection === 'ide' && (
-            <IdeSection choice={ideChoice} onChange={setIdeChoice} />
-          )}
-          {activeSection === 'network' && (
-            <NetworkSection proxyUrl={proxyUrl} onProxyChange={setProxyUrl} />
+          {activeSection === 'language' && (
+            <LanguageSection language={language} onChange={setLanguage} />
           )}
         </div>
       </div>
@@ -109,30 +107,31 @@ function AccountSection({ user, balance, onLogout }: {
   balance: number
   onLogout: () => void
 }) {
+  const { t } = useI18n()
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       {/* User info */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--accent-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, color: 'var(--accent)', fontWeight: 600 }}>
-          {user?.username?.[0]?.toUpperCase() || '?'}
+          {(user?.username || user?.email)?.[0]?.toUpperCase() || '?'}
         </div>
         <div>
-          <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>{user?.username || 'Unknown'}</div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{user?.email || ''}</div>
+          {user?.username && <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>{user.username}</div>}
+          <div style={{ fontSize: user?.username ? 12 : 14, color: user?.username ? 'var(--text-muted)' : 'var(--text-primary)', fontWeight: user?.username ? 400 : 500 }}>{user?.email || ''}</div>
         </div>
       </div>
 
       {/* Balance */}
-      <SettingsGroup title="Balance">
+      <SettingsGroup title={t('settings.balance')}>
         <div style={{ padding: 12, background: 'var(--bg-tertiary)', borderRadius: 8 }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Balance</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{t('settings.balance')}</div>
           <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)' }}>¥{(balance / 100).toFixed(2)}</div>
         </div>
         <button
           onClick={() => window.api.shell.openExternal('https://llm.starapp.net/zh/console/topup')}
           style={{ marginTop: 8, padding: '6px 14px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}
         >
-          Top Up
+          {t('settings.topUp')}
         </button>
       </SettingsGroup>
 
@@ -144,7 +143,7 @@ function AccountSection({ user, balance, onLogout }: {
         onClick={onLogout}
         style={{ alignSelf: 'flex-start', padding: '6px 14px', background: 'transparent', color: 'var(--error-text)', border: '1px solid var(--error)', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}
       >
-        Sign Out
+        {t('settings.signOut')}
       </button>
     </div>
   )
@@ -156,11 +155,12 @@ function ChangePasswordSection() {
   const [confirmPwd, setConfirmPwd] = useState('')
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState<{ type: 'error' | 'success'; text: string } | null>(null)
+  const { t } = useI18n()
 
   const handleSubmit = async () => {
     if (!currentPwd || !newPwd) return
     if (newPwd !== confirmPwd) {
-      setMsg({ type: 'error', text: 'Passwords do not match' })
+      setMsg({ type: 'error', text: t('settings.passwordsNotMatch') })
       return
     }
     setLoading(true)
@@ -168,7 +168,7 @@ function ChangePasswordSection() {
     const result = await window.api.auth.changePassword(currentPwd, newPwd)
     setLoading(false)
     if (result.success) {
-      setMsg({ type: 'success', text: 'Password changed' })
+      setMsg({ type: 'success', text: t('settings.passwordChanged') })
       setCurrentPwd(''); setNewPwd(''); setConfirmPwd('')
     } else {
       setMsg({ type: 'error', text: result.error || 'Failed' })
@@ -178,11 +178,11 @@ function ChangePasswordSection() {
   const disabled = loading || !currentPwd || !newPwd || !confirmPwd
 
   return (
-    <SettingsGroup title="Change Password">
+    <SettingsGroup title={t('settings.changePassword')}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <FocusInput type="password" value={currentPwd} onChange={e => setCurrentPwd(e.target.value)} placeholder="Current password" />
-        <FocusInput type="password" value={newPwd} onChange={e => setNewPwd(e.target.value)} placeholder="New password" />
-        <FocusInput type="password" value={confirmPwd} onChange={e => setConfirmPwd(e.target.value)} placeholder="Confirm new password" />
+        <FocusInput type="password" value={currentPwd} onChange={e => setCurrentPwd(e.target.value)} placeholder={t('settings.currentPassword')} />
+        <FocusInput type="password" value={newPwd} onChange={e => setNewPwd(e.target.value)} placeholder={t('settings.newPassword')} />
+        <FocusInput type="password" value={confirmPwd} onChange={e => setConfirmPwd(e.target.value)} placeholder={t('settings.confirmPassword')} />
         {msg && <div style={{ fontSize: 12, color: msg.type === 'error' ? 'var(--error-text)' : 'var(--success)' }}>{msg.text}</div>}
         <button
           onClick={handleSubmit}
@@ -193,17 +193,46 @@ function ChangePasswordSection() {
             ...(disabled ? disabledBtnBase : { cursor: 'pointer' }),
           }}
         >
-          {loading ? 'Changing...' : 'Change Password'}
+          {loading ? t('settings.changingPassword') : t('settings.changePassword')}
         </button>
       </div>
     </SettingsGroup>
   )
 }
 
-function AppearanceSection({ fontSize, onFontSizeChange }: { fontSize: number; onFontSizeChange: (v: number) => void }) {
+function AppearanceSection({ fontSize, onFontSizeChange, theme, onThemeChange }: {
+  fontSize: number; onFontSizeChange: (v: number) => void
+  theme: 'auto' | 'dark' | 'light'; onThemeChange: (v: 'auto' | 'dark' | 'light') => void
+}) {
+  const { t } = useI18n()
+  const themeOptions: { id: 'auto' | 'dark' | 'light'; label: string }[] = [
+    { id: 'auto', label: t('settings.themeAuto') },
+    { id: 'dark', label: t('settings.themeDark') },
+    { id: 'light', label: t('settings.themeLight') },
+  ]
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <SettingsGroup title="Terminal Font Size">
+      <SettingsGroup title={t('settings.theme')}>
+        {themeOptions.map(opt => (
+          <div
+            key={opt.id}
+            onClick={() => onThemeChange(opt.id)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
+              borderRadius: 6, cursor: 'pointer',
+              background: theme === opt.id ? 'var(--accent-subtle)' : 'transparent'
+            }}
+          >
+            <div style={{
+              width: 8, height: 8, borderRadius: '50%',
+              background: theme === opt.id ? 'var(--accent)' : 'transparent',
+              border: theme === opt.id ? 'none' : '2px solid var(--text-muted)'
+            }} />
+            <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>{opt.label}</span>
+          </div>
+        ))}
+      </SettingsGroup>
+      <SettingsGroup title={t('settings.terminalFontSize')}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <input
             type="range" min={10} max={24} value={fontSize}
@@ -213,57 +242,41 @@ function AppearanceSection({ fontSize, onFontSizeChange }: { fontSize: number; o
           <span style={{ fontSize: 13, color: 'var(--text-primary)', minWidth: 30 }}>{fontSize}px</span>
         </div>
       </SettingsGroup>
-      <SettingsGroup title="Theme">
-        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Dark theme (more themes coming soon)</div>
-      </SettingsGroup>
     </div>
   )
 }
 
-function IdeSection({ choice, onChange }: { choice: string; onChange: (v: string) => void }) {
-  const options = [
-    { id: 'vscode', label: 'VS Code', scheme: 'vscode://' },
-    { id: 'cursor', label: 'Cursor', scheme: 'cursor://' },
-    { id: 'zed', label: 'Zed', scheme: 'zed://' }
+function LanguageSection({ language, onChange }: { language: 'auto' | 'zh' | 'en'; onChange: (v: 'auto' | 'zh' | 'en') => void }) {
+  const { t } = useI18n()
+  const options: { id: 'auto' | 'zh' | 'en'; label: string }[] = [
+    { id: 'auto', label: t('settings.languageAuto') },
+    { id: 'zh', label: t('settings.languageZh') },
+    { id: 'en', label: t('settings.languageEn') },
   ]
   return (
-    <SettingsGroup title="Default IDE">
-      {options.map(opt => (
-        <div
-          key={opt.id}
-          onClick={() => onChange(opt.id)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
-            borderRadius: 6, cursor: 'pointer',
-            background: choice === opt.id ? 'var(--accent-subtle)' : 'transparent'
-          }}
-        >
-          <div style={{
-            width: 8, height: 8, borderRadius: '50%',
-            background: choice === opt.id ? 'var(--accent)' : 'transparent',
-            border: choice === opt.id ? 'none' : '2px solid var(--text-muted)'
-          }} />
-          <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>{opt.label}</span>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>{opt.scheme}</span>
-        </div>
-      ))}
-    </SettingsGroup>
-  )
-}
-
-function NetworkSection({ proxyUrl, onProxyChange }: { proxyUrl: string; onProxyChange: (v: string) => void }) {
-  return (
-    <SettingsGroup title="HTTP Proxy">
-      <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>
-        Set a proxy for API requests (leave empty to use system proxy)
-      </div>
-      <FocusInput
-        type="text"
-        value={proxyUrl}
-        onChange={(e) => onProxyChange(e.target.value)}
-        placeholder="http://127.0.0.1:7890"
-      />
-    </SettingsGroup>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <SettingsGroup title={t('settings.languageLabel')}>
+        <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>{t('settings.languageHint')}</div>
+        {options.map(opt => (
+          <div
+            key={opt.id}
+            onClick={() => onChange(opt.id)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
+              borderRadius: 6, cursor: 'pointer',
+              background: language === opt.id ? 'var(--accent-subtle)' : 'transparent'
+            }}
+          >
+            <div style={{
+              width: 8, height: 8, borderRadius: '50%',
+              background: language === opt.id ? 'var(--accent)' : 'transparent',
+              border: language === opt.id ? 'none' : '2px solid var(--text-muted)'
+            }} />
+            <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>{opt.label}</span>
+          </div>
+        ))}
+      </SettingsGroup>
+    </div>
   )
 }
 

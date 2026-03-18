@@ -2,16 +2,31 @@ import { useCallback, useRef, useEffect, useState } from 'react'
 import { useTerminalStore } from './stores/terminal'
 import { useAppStore } from './stores/app'
 import { useAuthStore } from './stores/auth'
-import { useSettingsStore } from './stores/settings'
+import { useSettingsStore, applyTheme } from './stores/settings'
 import { TerminalView } from './views/terminal/TerminalView'
 import { Sidebar } from './views/sidebar/Sidebar'
 import { SetupScreen, startInstall } from './views/setup/SetupScreen'
 import { LoginScreen } from './views/login/LoginScreen'
 import { SettingsPanel } from './views/settings/SettingsPanel'
 import { UpdateToast } from './views/update/UpdateToast'
+import { useI18n } from './i18n'
 
-const DEFAULT_CWD = window.api?.homedir || '/Users'
+const DEFAULT_CWD = window.api?.homedir || '/'
 const isMac = window.api?.platform === 'darwin'
+
+/** Shorten absolute path: replace home dir with ~, normalize separators */
+export function shortenPath(p: string): string {
+  const home = window.api?.homedir || ''
+  if (home && p.startsWith(home)) {
+    p = '~' + p.slice(home.length)
+  }
+  return p.replace(/\\/g, '/')
+}
+
+/** Get last segment of a path (works with both / and \) */
+function pathBasename(p: string): string {
+  return p.replace(/\\/g, '/').split('/').pop() || 'terminal'
+}
 
 const IDE_SCHEMES: Record<string, string> = {
   vscode: 'vscode://',
@@ -29,6 +44,7 @@ export function App() {
   const [appUpdateStatus, setAppUpdateStatus] = useState<{
     type: string; version?: string; percent?: number
   } | null>(null)
+  const { t } = useI18n()
 
   // Startup: check auth → check CLI
   useEffect(() => {
@@ -84,18 +100,20 @@ export function App() {
     const cliInfo = await window.api.cli.getInfo()
     const token = await window.api.auth.getToken()
 
-    const ptyId = await window.api.pty.create({
+    const result = await window.api.pty.create({
       cwd: targetCwd,
       launchClaude: cliInfo.installed,
       env: {
-        ...(token ? { ANTHROPIC_API_KEY: token } : {}),
+        ...(token ? { ANTHROPIC_AUTH_TOKEN: token } : {}),
         ANTHROPIC_BASE_URL: 'https://llm.starapp.net/api/llm'
       }
     })
 
+    if (result.error || !result.id) return
+
     const id = crypto.randomUUID()
-    const title = targetCwd.split('/').pop() || 'terminal'
-    addTab({ id, ptyId, title, cwd: targetCwd })
+    const title = pathBasename(targetCwd)
+    addTab({ id, ptyId: result.id, title, cwd: targetCwd })
 
     // Persist to recent projects
     saveRecentProject(targetCwd)
@@ -115,14 +133,10 @@ export function App() {
     if (dir) handleNewTab(dir)
   }, [handleNewTab])
 
-  useEffect(() => {
-    if (phase === 'ready' && tabs.length === 0) handleNewTab()
-  }, [phase, tabs.length, handleNewTab])
-
   // Menu keyboard shortcuts
   useEffect(() => {
     const unsubs = [
-      window.api.menu.onNewTab(() => handleNewTab()),
+      window.api.menu.onNewTab(() => handleSelectDirectory()),
       window.api.menu.onCloseTab(() => {
         if (activeTabId) handleCloseTab(activeTabId)
       }),
@@ -132,9 +146,9 @@ export function App() {
       window.api.menu.onOpenFolder((path) => handleNewTab(path))
     ]
     return () => unsubs.forEach(fn => fn())
-  }, [handleNewTab, handleCloseTab, activeTabId, tabs, setActiveTab])
+  }, [handleSelectDirectory, handleCloseTab, activeTabId, tabs, setActiveTab])
 
-  // Periodic CLI update check (every 30 min)
+  // Check CLI update once on startup
   useEffect(() => {
     if (phase !== 'ready') return
     const check = async () => {
@@ -146,8 +160,6 @@ export function App() {
       }
     }
     check()
-    const timer = setInterval(check, 30 * 60 * 1000)
-    return () => clearInterval(timer)
   }, [phase])
 
   // App auto-update status listener
@@ -158,6 +170,14 @@ export function App() {
       }
     })
     return () => { unsub() }
+  }, [])
+
+  // Listen for system theme changes (for 'auto' mode)
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: light)')
+    const handler = () => applyTheme(useSettingsStore.getState().theme)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
   }, [])
 
   // Periodic balance refresh (every 5 min)
@@ -182,6 +202,8 @@ export function App() {
     }
   }, [setCliInfo])
 
+  const activeTab = tabs.find((t) => t.id === activeTabId)
+
   const titleBar = (
     <div
       className="titlebar-drag"
@@ -193,9 +215,9 @@ export function App() {
     >
       {isMac && <div style={{ width: 70 }} />}
       <div style={{ flex: 1, textAlign: 'center', fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>
-        Inkess Claude Code
-        {phase === 'ready' && activeTabId && tabs.find((t) => t.id === activeTabId) && (
-          <span> — {tabs.find((t) => t.id === activeTabId)!.cwd.replace(/^\/Users\/[^/]+/, '~')}</span>
+        {t('app.title')}
+        {phase === 'ready' && activeTab && (
+          <span> — {shortenPath(activeTab.cwd)}</span>
         )}
       </div>
       {isMac && <div style={{ width: 70 }} />}
@@ -229,10 +251,8 @@ export function App() {
       {titleBar}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <Sidebar
-          onSelectDirectory={handleSelectDirectory}
           onSettings={() => { setShowSettings(true); window.api.analytics?.track('settings_open') }}
           onOpenProject={(cwd) => {
-            // If already open in a tab, switch to it; otherwise create new tab
             const existing = tabs.find(t => t.cwd === cwd)
             if (existing) {
               setActiveTab(existing.id)
@@ -242,20 +262,26 @@ export function App() {
           }}
         />
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <TabBar
-            tabs={tabs}
-            activeTabId={activeTabId}
-            onSelect={setActiveTab}
-            onClose={handleCloseTab}
-            onNew={() => handleNewTab()}
-          />
-          <Toolbar tabs={tabs} activeTabId={activeTabId} />
-          <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-            {tabs.map((tab) => (
-              <TerminalView key={tab.id} ptyId={tab.ptyId} isActive={tab.id === activeTabId} />
-            ))}
-          </div>
-          <StatusBar />
+          {tabs.length === 0 ? (
+            <WelcomeScreen onOpenFolder={handleSelectDirectory} onOpenProject={handleNewTab} />
+          ) : (
+            <>
+              <TabBar
+                tabs={tabs}
+                activeTabId={activeTabId}
+                onSelect={setActiveTab}
+                onClose={handleCloseTab}
+                onNew={handleSelectDirectory}
+              />
+              <Toolbar tabs={tabs} activeTabId={activeTabId} />
+              <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+                {tabs.map((tab) => (
+                  <TerminalView key={tab.id} ptyId={tab.ptyId} isActive={tab.id === activeTabId} />
+                ))}
+              </div>
+              <StatusBar />
+            </>
+          )}
         </div>
       </div>
       {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} onLogout={handleLogout} />}
@@ -372,9 +398,11 @@ function TabBar({ tabs, activeTabId, onSelect, onClose, onNew }: {
 function Toolbar({ tabs, activeTabId }: { tabs: TerminalTab[]; activeTabId: string | null }) {
   const activeTab = tabs.find((t) => t.id === activeTabId)
   const ideChoice = useSettingsStore((s) => s.ideChoice)
+  const { t } = useI18n()
   if (!activeTab) return null
 
   const ideScheme = IDE_SCHEMES[ideChoice] || 'vscode://'
+  const ideName = ideChoice === 'vscode' ? 'VS Code' : ideChoice === 'cursor' ? 'Cursor' : 'Zed'
 
   return (
     <div style={{
@@ -382,20 +410,28 @@ function Toolbar({ tabs, activeTabId }: { tabs: TerminalTab[]; activeTabId: stri
       alignItems: 'center', gap: 8, padding: '0 12px',
       borderBottom: '1px solid var(--border)', flexShrink: 0
     }}>
-      <div style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 12, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+      <div
+        title={t('toolbar.openInFinder')}
+        onClick={() => window.api.shell.openPath(activeTab.cwd)}
+        style={{
+          fontFamily: 'var(--font-mono, monospace)', fontSize: 12, color: 'var(--text-secondary)',
+          display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer',
+          padding: '2px 6px', borderRadius: 4, transition: 'background 0.12s, color 0.12s',
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)' }}
+      >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.5">
           <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
         </svg>
-        {activeTab.cwd.replace(/^\/Users\/[^/]+/, '~')}
+        {shortenPath(activeTab.cwd)}
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ opacity: 0.5 }}>
+          <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+          <polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+        </svg>
       </div>
       <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
-        <ToolbarButton title="Open in Finder" onClick={() => window.api.shell.openPath(activeTab.cwd)}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
-            <polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
-          </svg>
-        </ToolbarButton>
-        <ToolbarButton title={`Open in ${ideChoice === 'vscode' ? 'VS Code' : ideChoice === 'cursor' ? 'Cursor' : 'Zed'}`} onClick={() => window.api.shell.openExternal(`${ideScheme}file/${activeTab.cwd}`)}>
+        <ToolbarButton title={t('toolbar.openInIde', { ide: ideName })} onClick={() => window.api.shell.openExternal(`${ideScheme}file/${activeTab.cwd}`)}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" />
           </svg>
@@ -407,6 +443,7 @@ function Toolbar({ tabs, activeTabId }: { tabs: TerminalTab[]; activeTabId: stri
 
 function StatusBar() {
   const { balance } = useAuthStore()
+  const { t } = useI18n()
   return (
     <div style={{
       height: 24, background: 'var(--bg-secondary)', display: 'flex',
@@ -415,11 +452,11 @@ function StatusBar() {
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)' }} />
-        Connected
+        {t('app.connected')}
       </div>
       <div>Claude Code {useAppStore.getState().cliVersion || ''}</div>
       <div style={{ marginLeft: 'auto' }}>
-        Balance: ¥{(balance / 100).toFixed(2)}
+        {t('app.balance')}: ¥{(balance / 100).toFixed(2)}
       </div>
     </div>
   )
@@ -442,10 +479,81 @@ function ToolbarButton({ title, onClick, children }: { title: string; onClick: (
   )
 }
 
+function WelcomeScreen({ onOpenFolder, onOpenProject }: { onOpenFolder: () => void; onOpenProject: (cwd: string) => void }) {
+  const { t } = useI18n()
+  const [hovered, setHovered] = useState<string | null>(null)
+  const recentDirs = getRecentProjects()
+
+  return (
+    <div style={{
+      flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+      justifyContent: 'center', gap: 24, padding: 32
+    }}>
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1">
+        <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
+      </svg>
+
+      <button
+        onClick={onOpenFolder}
+        onMouseEnter={() => setHovered('open')}
+        onMouseLeave={() => setHovered(null)}
+        style={{
+          padding: '10px 28px', borderRadius: 6, border: 'none',
+          background: hovered === 'open' ? 'var(--accent-hover, var(--accent))' : 'var(--accent)',
+          color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 500,
+          transition: 'background 0.15s'
+        }}
+      >
+        {t('welcome.openFolder')}
+      </button>
+
+      {recentDirs.length > 0 && (
+        <div style={{ width: '100%', maxWidth: 400, marginTop: 8 }}>
+          <div style={{
+            fontSize: 11, fontWeight: 600, color: 'var(--text-muted)',
+            textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8
+          }}>
+            {t('welcome.recentProjects')}
+          </div>
+          {recentDirs.map((dir) => (
+            <div
+              key={dir}
+              onClick={() => onOpenProject(dir)}
+              onMouseEnter={() => setHovered(dir)}
+              onMouseLeave={() => setHovered(null)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10, padding: 8,
+                borderRadius: 6, cursor: 'pointer', fontSize: 13,
+                color: hovered === dir ? 'var(--text-primary)' : 'var(--text-secondary)',
+                background: hovered === dir ? 'var(--bg-hover)' : 'transparent',
+                transition: 'background 0.12s, color 0.12s',
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
+              </svg>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                {shortenPath(dir)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {recentDirs.length === 0 && (
+        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+          {t('welcome.noRecent')}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function AppUpdateToast({ version, downloaded, bottomOffset, onDownload, onInstall, onDismiss }: {
   version: string; downloaded?: boolean; bottomOffset?: number
   onDownload?: () => void; onInstall?: () => void; onDismiss: () => void
 }) {
+  const { t } = useI18n()
   return (
     <div style={{
       position: 'fixed', bottom: bottomOffset ?? 16, right: 16, background: 'var(--bg-secondary)',
@@ -453,17 +561,17 @@ function AppUpdateToast({ version, downloaded, bottomOffset, onDownload, onInsta
       display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, color: 'var(--text-primary)',
       boxShadow: '0 4px 12px rgba(0,0,0,0.3)', zIndex: 1000
     }}>
-      <span>{downloaded ? `v${version} ready to install` : `App update v${version} available`}</span>
+      <span>{downloaded ? t('appUpdate.ready', { version }) : t('appUpdate.available', { version })}</span>
       {downloaded ? (
         <button onClick={onInstall} style={{
           padding: '4px 12px', borderRadius: 4, border: 'none',
           background: 'var(--accent)', color: '#fff', cursor: 'pointer', fontSize: 12
-        }}>Restart & Update</button>
+        }}>{t('appUpdate.restartUpdate')}</button>
       ) : (
         <button onClick={onDownload} style={{
           padding: '4px 12px', borderRadius: 4, border: 'none',
           background: 'var(--accent)', color: '#fff', cursor: 'pointer', fontSize: 12
-        }}>Download</button>
+        }}>{t('appUpdate.download')}</button>
       )}
       <span onClick={onDismiss} style={{ cursor: 'pointer', opacity: 0.5, fontSize: 16 }}>×</span>
     </div>

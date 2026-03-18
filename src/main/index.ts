@@ -23,7 +23,7 @@ function createWindow(): void {
     const iconPath = join(__dirname, '../../resources/icon-512.png')
     try {
       const icon = nativeImage.createFromPath(iconPath)
-      if (!icon.isEmpty()) app.dock.setIcon(icon)
+      if (!icon.isEmpty()) app.dock?.setIcon(icon)
     } catch { /* icon file may not exist in some builds */ }
   }
 
@@ -32,13 +32,14 @@ function createWindow(): void {
     height: 700,
     minWidth: 800,
     minHeight: 500,
-    titleBarStyle: 'hiddenInset',
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
     backgroundColor: '#1A1A2E',
     icon: join(__dirname, '../../resources/icon-256.png'),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      sandbox: false
     }
   })
 
@@ -232,7 +233,7 @@ app.whenReady().then(() => {
           ...details.responseHeaders,
           'Content-Security-Policy': [
             "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
-            "connect-src https://llm.starapp.net https://cli-mirror.inkess.com; " +
+            "connect-src https://llm.starapp.net https://inkess-install-file.oss-cn-beijing.aliyuncs.com; " +
             "font-src 'self'; img-src 'self' data:;"
           ]
         }

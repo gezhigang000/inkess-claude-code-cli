@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useI18n } from '../../i18n'
 
 interface UpdateToastProps {
   currentVersion: string
@@ -9,6 +10,7 @@ interface UpdateToastProps {
 
 export function UpdateToast({ currentVersion, latestVersion, onUpdate, onDismiss }: UpdateToastProps) {
   const [updating, setUpdating] = useState(false)
+  const { t } = useI18n()
 
   const handleUpdate = async () => {
     setUpdating(true)
@@ -28,12 +30,12 @@ export function UpdateToast({ currentVersion, latestVersion, onUpdate, onDismiss
             <polyline points="7 10 12 15 17 10" />
             <line x1="12" y1="15" x2="12" y2="3" />
           </svg>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Update Available</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{t('update.available')}</span>
         </div>
         <button onClick={onDismiss} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16, padding: 0 }}>×</button>
       </div>
       <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
-        Claude Code CLI {latestVersion} is available (current: {currentVersion})
+        {t('update.description', { latest: latestVersion, current: currentVersion })}
       </p>
       <div style={{ display: 'flex', gap: 8 }}>
         <button
@@ -45,7 +47,7 @@ export function UpdateToast({ currentVersion, latestVersion, onUpdate, onDismiss
             cursor: updating ? 'wait' : 'pointer'
           }}
         >
-          {updating ? 'Updating...' : 'Update Now'}
+          {updating ? t('update.updating') : t('update.now')}
         </button>
         <button
           onClick={onDismiss}
@@ -54,7 +56,7 @@ export function UpdateToast({ currentVersion, latestVersion, onUpdate, onDismiss
             border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, cursor: 'pointer'
           }}
         >
-          Later
+          {t('update.later')}
         </button>
       </div>
     </div>

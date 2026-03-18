@@ -1,12 +1,21 @@
 import { useEffect, useRef } from 'react'
-import { Terminal } from 'xterm'
+import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
-import { WebglAddon } from '@xterm/addon-webgl'
 import { useSettingsStore } from '../../stores/settings'
 
 interface TerminalViewProps {
   ptyId: string | null
   isActive: boolean
+}
+
+function safeFit(container: HTMLDivElement | null, fitAddon: FitAddon | null) {
+  if (!fitAddon || !container) return
+  if (container.offsetWidth === 0 || container.offsetHeight === 0) return
+  try {
+    fitAddon.fit()
+  } catch {
+    // Ignore fit errors
+  }
 }
 
 export function TerminalView({ ptyId, isActive }: TerminalViewProps) {
@@ -55,25 +64,23 @@ export function TerminalView({ ptyId, isActive }: TerminalViewProps) {
 
     term.open(containerRef.current)
 
-    try {
-      const webglAddon = new WebglAddon()
-      term.loadAddon(webglAddon)
-    } catch {
-      // WebGL not available, fallback to canvas
-    }
-
-    fitAddon.fit()
     termRef.current = term
     fitAddonRef.current = fitAddon
 
+    // Defer initial fit to next frame so container has dimensions
+    requestAnimationFrame(() => {
+      safeFit(containerRef.current, fitAddon)
+    })
+
     // Resize observer
+    const container = containerRef.current
     const resizeObserver = new ResizeObserver(() => {
-      fitAddon.fit()
+      safeFit(container, fitAddon)
       if (ptyId) {
         window.api.pty.resize(ptyId, term.cols, term.rows)
       }
     })
-    resizeObserver.observe(containerRef.current)
+    resizeObserver.observe(container)
 
     // PTY data → terminal
     const removeDataListener = window.api.pty.onData(({ id, data }) => {
@@ -101,7 +108,7 @@ export function TerminalView({ ptyId, isActive }: TerminalViewProps) {
   useEffect(() => {
     if (termRef.current) {
       termRef.current.options.fontSize = fontSize
-      fitAddonRef.current?.fit()
+      safeFit(containerRef.current, fitAddonRef.current)
     }
   }, [fontSize])
 
@@ -109,7 +116,7 @@ export function TerminalView({ ptyId, isActive }: TerminalViewProps) {
   useEffect(() => {
     if (isActive && termRef.current) {
       termRef.current.focus()
-      fitAddonRef.current?.fit()
+      safeFit(containerRef.current, fitAddonRef.current)
     }
   }, [isActive])
 

@@ -14,7 +14,8 @@ export class PtyManager {
 
   create(cwd: string, env?: Record<string, string>, command?: string, args?: string[]): string {
     const id = randomUUID()
-    const shell = command || (os.platform() === 'win32' ? 'powershell.exe' : process.env.SHELL || '/bin/zsh')
+    const isWin = os.platform() === 'win32'
+    const shell = command || (isWin ? 'powershell.exe' : process.env.SHELL || '/bin/zsh')
 
     try {
       const ptyProcess = pty.spawn(shell, args || [], {
@@ -26,9 +27,16 @@ export class PtyManager {
           ...process.env,
           ...env,
           TERM: 'xterm-256color',
-          COLORTERM: 'truecolor'
+          COLORTERM: 'truecolor',
+          // Force UTF-8 on Windows to avoid GBK encoding issues
+          ...(isWin ? { PYTHONIOENCODING: 'utf-8' } : {}),
         } as Record<string, string>
       })
+
+      // On Windows, switch console codepage to UTF-8 (65001) to prevent GBK mojibake
+      if (isWin && !command) {
+        ptyProcess.write('chcp 65001 >nul 2>&1\r')
+      }
 
       const session: PtySession = {
         process: ptyProcess,

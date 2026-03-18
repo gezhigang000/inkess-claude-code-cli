@@ -1,7 +1,9 @@
 import { useAppStore } from '../../stores/app'
+import { useI18n, getT } from '../../i18n'
 
 export function SetupScreen() {
   const { phase, installSteps, installError, installProgress } = useAppStore()
+  const { t } = useI18n()
 
   const handleRetry = async () => {
     useAppStore.getState().setPhase('installing')
@@ -51,7 +53,7 @@ export function SetupScreen() {
             color: 'var(--text-primary)'
           }}
         >
-          {phase === 'checking' ? 'Checking environment...' : 'Setting up Claude Code'}
+          {phase === 'checking' ? t('setup.checking') : t('setup.settingUp')}
         </h2>
         <p
           style={{
@@ -61,8 +63,8 @@ export function SetupScreen() {
           }}
         >
           {phase === 'checking'
-            ? 'Verifying Claude Code CLI installation'
-            : 'First-time setup — this only takes a moment'}
+            ? t('setup.verifying')
+            : t('setup.firstTime')}
         </p>
 
         {/* Steps */}
@@ -182,7 +184,7 @@ export function SetupScreen() {
                 cursor: 'pointer'
               }}
             >
-              Retry
+              {t('setup.retry')}
             </button>
           </div>
         )}
@@ -199,13 +201,14 @@ export function SetupScreen() {
 /** Start the CLI install flow. Call from App after detecting CLI is not installed. */
 export async function startInstall(): Promise<boolean> {
   const { setInstallSteps, setPhase, setCliInfo, setInstallError, setInstallProgress } = useAppStore.getState()
+  const t = getT()
 
   setPhase('installing')
   setInstallProgress(10)
   setInstallSteps([
-    { label: 'Checking environment', status: 'done' },
-    { label: 'Downloading Claude Code CLI...', status: 'active' },
-    { label: 'Verifying installation', status: 'pending' }
+    { label: t('setup.checkEnv'), status: 'done' },
+    { label: t('setup.downloading'), status: 'active' },
+    { label: t('setup.verifyInstall'), status: 'pending' }
   ])
 
   // Listen for progress
@@ -213,9 +216,9 @@ export async function startInstall(): Promise<boolean> {
     setInstallProgress(Math.round(progress * 100))
     if (step.includes('Verifying')) {
       setInstallSteps([
-        { label: 'Checking environment', status: 'done' },
-        { label: 'Download complete', status: 'done' },
-        { label: 'Verifying installation...', status: 'active' }
+        { label: t('setup.checkEnv'), status: 'done' },
+        { label: t('setup.downloadComplete'), status: 'done' },
+        { label: t('setup.verifyingInstall'), status: 'active' }
       ])
       setInstallProgress(85)
     }
@@ -227,9 +230,9 @@ export async function startInstall(): Promise<boolean> {
   if (result.success) {
     setInstallProgress(100)
     setInstallSteps([
-      { label: 'Checking environment', status: 'done' },
-      { label: 'Download complete', status: 'done' },
-      { label: 'Installation complete', status: 'done' }
+      { label: t('setup.checkEnv'), status: 'done' },
+      { label: t('setup.downloadComplete'), status: 'done' },
+      { label: t('setup.installComplete'), status: 'done' }
     ])
 
     const info = await window.api.cli.getInfo()

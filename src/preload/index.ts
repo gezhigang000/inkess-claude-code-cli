@@ -1,8 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import * as os from 'os'
 
 const api = {
   platform: process.platform,
-  homedir: process.env.HOME || process.env.USERPROFILE || '/',
+  homedir: os.homedir(),
 
   auth: {
     getStatus: () => ipcRenderer.invoke('auth:getStatus') as Promise<{

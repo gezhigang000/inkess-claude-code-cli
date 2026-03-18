@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
+import { useI18n } from '../../i18n'
 
 interface LoginScreenProps {
   onLoginSuccess: () => void
@@ -10,10 +11,11 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   const [tab, setTab] = useState<Tab>('login')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const { t } = useI18n()
 
   return (
-    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)' }}>
-      <div style={{ width: 380 }}>
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)', overflowY: 'auto' }}>
+      <div style={{ width: 380, margin: '32px auto' }}>
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <div style={{ width: 56, height: 56, margin: '0 auto 16px', borderRadius: 14, background: 'var(--accent-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.5">
@@ -21,26 +23,26 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
               <line x1="12" y1="19" x2="20" y2="19" />
             </svg>
           </div>
-          <h2 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>Inkess Claude Code</h2>
+          <h2 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>{t('login.title')}</h2>
           <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-            {tab === 'login' ? 'Sign in with your Inkess account' : 'Create a new Inkess account'}
+            {tab === 'login' ? t('login.signInSubtitle') : t('login.registerSubtitle')}
           </p>
         </div>
 
         {/* Tab switcher */}
         <div style={{ display: 'flex', marginBottom: 20, borderRadius: 8, background: 'var(--bg-tertiary)', padding: 3 }}>
-          {(['login', 'register'] as Tab[]).map(t => (
+          {(['login', 'register'] as Tab[]).map(tb => (
             <button
-              key={t}
-              onClick={() => { setTab(t); setError(null); setSuccess(null) }}
+              key={tb}
+              onClick={() => { setTab(tb); setError(null); setSuccess(null) }}
               style={{
                 flex: 1, padding: '8px 0', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 500, cursor: 'pointer',
-                background: tab === t ? 'var(--bg-primary)' : 'transparent',
-                color: tab === t ? 'var(--text-primary)' : 'var(--text-muted)',
-                boxShadow: tab === t ? '0 1px 3px rgba(0,0,0,0.2)' : 'none'
+                background: tab === tb ? 'var(--bg-primary)' : 'transparent',
+                color: tab === tb ? 'var(--text-primary)' : 'var(--text-muted)',
+                boxShadow: tab === tb ? '0 1px 3px rgba(0,0,0,0.2)' : 'none'
               }}
             >
-              {t === 'login' ? 'Sign In' : 'Register'}
+              {tb === 'login' ? t('login.signIn') : t('login.register')}
             </button>
           ))}
         </div>
@@ -86,6 +88,7 @@ function LoginForm({ onSuccess, onError }: { onSuccess: () => void; onError: (e:
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const disabled = loading || !login || !password
+  const { t } = useI18n()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -97,24 +100,24 @@ function LoginForm({ onSuccess, onError }: { onSuccess: () => void; onError: (e:
     if (result.success) {
       onSuccess()
     } else {
-      onError(result.error || 'Login failed')
+      onError(result.error || t('login.loginFailed'))
     }
   }
 
   return (
     <form onSubmit={handleSubmit}>
       <div style={{ marginBottom: 16 }}>
-        <label style={labelStyle}>Email or Username</label>
+        <label style={labelStyle}>{t('login.emailOrUsername')}</label>
         <FocusInput
           type="text" value={login} onChange={(e) => setLogin(e.target.value)}
-          placeholder="you@example.com" autoFocus
+          placeholder={t('login.emailPlaceholder')} autoFocus
         />
       </div>
       <div style={{ marginBottom: 8 }}>
-        <label style={labelStyle}>Password</label>
+        <label style={labelStyle}>{t('login.password')}</label>
         <FocusInput
           type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-          placeholder="Enter your password"
+          placeholder={t('login.passwordPlaceholder')}
         />
       </div>
       <div style={{ textAlign: 'right', marginBottom: 20 }}>
@@ -126,7 +129,7 @@ function LoginForm({ onSuccess, onError }: { onSuccess: () => void; onError: (e:
           onKeyDown={(e) => { if (e.key === 'Enter') window.api.shell.openExternal('https://llm.starapp.net/zh/console/forgot-password') }}
           style={{ fontSize: 12, color: 'var(--accent)', cursor: 'pointer', textDecoration: 'none' }}
         >
-          Forgot password?
+          {t('login.forgotPassword')}
         </a>
       </div>
       <button
@@ -137,7 +140,7 @@ function LoginForm({ onSuccess, onError }: { onSuccess: () => void; onError: (e:
           ...(disabled ? { cursor: 'not-allowed', opacity: 0.5 } : { cursor: 'pointer' }),
         }}
       >
-        {loading ? 'Signing in...' : 'Sign In'}
+        {loading ? t('login.signingIn') : t('login.signIn')}
       </button>
     </form>
   )
@@ -157,6 +160,7 @@ function RegisterForm({ onSuccess, onError, onMessage }: {
   const [countdown, setCountdown] = useState(0)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const disabled = loading || !email || !code || !password
+  const { t } = useI18n()
 
   // Cleanup timer on unmount
   useEffect(() => {
@@ -172,7 +176,7 @@ function RegisterForm({ onSuccess, onError, onMessage }: {
     const result = await window.api.auth.sendCode(email)
     setCodeSending(false)
     if (result.success) {
-      onMessage('Verification code sent')
+      onMessage(t('login.codeSent'))
       setCountdown(60)
       timerRef.current = setInterval(() => {
         setCountdown(prev => {
@@ -185,9 +189,9 @@ function RegisterForm({ onSuccess, onError, onMessage }: {
         })
       }, 1000)
     } else {
-      onError(result.error || 'Failed to send code')
+      onError(result.error || t('login.sendCodeFailed'))
     }
-  }, [email, countdown, onError, onMessage])
+  }, [email, countdown, onError, onMessage, t])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -203,25 +207,25 @@ function RegisterForm({ onSuccess, onError, onMessage }: {
     if (result.success) {
       onSuccess()
     } else {
-      onError(result.error || 'Registration failed')
+      onError(result.error || t('login.registrationFailed'))
     }
   }
 
   return (
     <form onSubmit={handleSubmit}>
       <div style={{ marginBottom: 16 }}>
-        <label style={labelStyle}>Email</label>
+        <label style={labelStyle}>{t('login.email')}</label>
         <FocusInput
           type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@example.com" autoFocus
+          placeholder={t('login.emailPlaceholder')} autoFocus
         />
       </div>
       <div style={{ marginBottom: 16 }}>
-        <label style={labelStyle}>Verification Code</label>
+        <label style={labelStyle}>{t('login.verificationCode')}</label>
         <div style={{ display: 'flex', gap: 8 }}>
           <FocusInput
             type="text" value={code} onChange={(e) => setCode(e.target.value)}
-            placeholder="Enter code" maxLength={6}
+            placeholder={t('login.enterCode')} maxLength={6}
             style={{ flex: 1 }}
           />
           <button
@@ -234,15 +238,15 @@ function RegisterForm({ onSuccess, onError, onMessage }: {
               cursor: (!email || countdown > 0) ? 'not-allowed' : 'pointer',
             }}
           >
-            {codeSending ? '...' : countdown > 0 ? `${countdown}s` : 'Send Code'}
+            {codeSending ? '...' : countdown > 0 ? `${countdown}s` : t('login.sendCode')}
           </button>
         </div>
       </div>
       <div style={{ marginBottom: 16 }}>
-        <label style={labelStyle}>Password</label>
+        <label style={labelStyle}>{t('login.password')}</label>
         <FocusInput
           type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-          placeholder="Create a password"
+          placeholder={t('login.createPassword')}
         />
       </div>
 
@@ -252,22 +256,22 @@ function RegisterForm({ onSuccess, onError, onMessage }: {
           onClick={() => setShowMore(true)}
           style={{ fontSize: 12, color: 'var(--accent)', cursor: 'pointer', marginBottom: 20, textAlign: 'center' }}
         >
-          More options (username, referral code)
+          {t('login.moreOptions')}
         </div>
       ) : (
         <>
           <div style={{ marginBottom: 16 }}>
-            <label style={labelStyle}>Username (optional)</label>
+            <label style={labelStyle}>{t('login.username')}</label>
             <FocusInput
               type="text" value={username} onChange={(e) => setUsername(e.target.value)}
-              placeholder="Choose a username"
+              placeholder={t('login.chooseUsername')}
             />
           </div>
           <div style={{ marginBottom: 24 }}>
-            <label style={labelStyle}>Referral Code (optional)</label>
+            <label style={labelStyle}>{t('login.referralCode')}</label>
             <FocusInput
               type="text" value={referralCode} onChange={(e) => setReferralCode(e.target.value)}
-              placeholder="Enter referral code"
+              placeholder={t('login.enterReferralCode')}
             />
           </div>
         </>
@@ -281,7 +285,7 @@ function RegisterForm({ onSuccess, onError, onMessage }: {
           ...(disabled ? { cursor: 'not-allowed', opacity: 0.5 } : { cursor: 'pointer' }),
         }}
       >
-        {loading ? 'Creating account...' : 'Create Account'}
+        {loading ? t('login.creatingAccount') : t('login.createAccount')}
       </button>
     </form>
   )
