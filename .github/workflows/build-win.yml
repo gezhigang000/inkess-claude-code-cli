@@ -58,5 +58,12 @@ jobs:
               print(f'Uploading {key}...')
               oss2.resumable_upload(bucket, key, f, part_size=10*1024*1024, num_threads=2)
               print(f'Done: {name}')
+          # Create latest/ copy for permanent download URL
+          exe_files = glob.glob('release/*.exe')
+          if exe_files:
+              exe_name = os.path.basename(exe_files[0])
+              src_key = f'app-releases/{exe_name}'
+              bucket.copy_object(bucket.bucket_name, src_key, 'app-releases/latest/windows-x64.exe')
+              print(f'latest/ <- {exe_name}')
           print('OSS upload complete.')
           "

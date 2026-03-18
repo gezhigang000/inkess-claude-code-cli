@@ -124,6 +124,8 @@ if [ -n "$OSS_ACCESS_KEY_ID" ] && [ -n "$OSS_ACCESS_KEY_SECRET" ]; then
 import oss2, os, glob, json, urllib.parse
 auth = oss2.Auth(os.environ['OSS_ACCESS_KEY_ID'], os.environ['OSS_ACCESS_KEY_SECRET'])
 bucket = oss2.Bucket(auth, 'https://oss-cn-beijing.aliyuncs.com', 'inkess-install-file')
+
+# Upload versioned files
 for f in glob.glob('release/*.dmg') + glob.glob('release/*.dmg.blockmap') + glob.glob('release/latest-mac.yml'):
     name = os.path.basename(f)
     key = f'app-releases/{name}'
@@ -131,18 +133,27 @@ for f in glob.glob('release/*.dmg') + glob.glob('release/*.dmg.blockmap') + glob
     print(f'  {name} ({size_mb:.1f} MB)...')
     oss2.resumable_upload(bucket, key, f, part_size=10*1024*1024, num_threads=3)
 
-# Upload meta.json
+# Create latest/ copies (permanent download URLs)
 v = '$NEW_VERSION'
+copies = {
+    f'app-releases/Inkess Claude Code CLI-{v}-arm64.dmg': 'app-releases/latest/macos-arm64.dmg',
+    f'app-releases/Inkess Claude Code CLI-{v}.dmg': 'app-releases/latest/macos-x64.dmg',
+}
+for src, dst in copies.items():
+    bucket.copy_object(bucket.bucket_name, src, dst)
+    print(f'  latest/ ← {os.path.basename(src)}')
+
+# Upload meta.json
 base = 'https://download.starapp.net/app-releases'
 meta = {
     'version': v,
-    'mac_arm64': f'{base}/Inkess%20Claude%20Code%20CLI-{v}-arm64.dmg',
-    'mac_x64': f'{base}/Inkess%20Claude%20Code%20CLI-{v}.dmg',
-    'win_x64': f'{base}/{urllib.parse.quote(f\"Inkess Claude Code CLI Setup {v}.exe\")}',
+    'mac_arm64': f'{base}/latest/macos-arm64.dmg',
+    'mac_x64': f'{base}/latest/macos-x64.dmg',
+    'win_x64': f'{base}/latest/windows-x64.exe',
     'homebrew': 'brew tap gezhigang000/tap && brew install --cask inkess-claude-code-cli'
 }
 bucket.put_object('app-releases/meta.json', json.dumps(meta, ensure_ascii=False).encode())
-print('  OSS upload complete + meta.json updated')
+print('  OSS upload complete + latest/ updated + meta.json updated')
 " || warn "OSS upload failed (non-fatal)"
 else
   warn "Skipping OSS upload (no credentials)"
