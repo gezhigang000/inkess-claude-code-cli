@@ -118,6 +118,20 @@ for f in glob.glob('release/*.dmg') + glob.glob('release/*.dmg.blockmap') + glob
     print(f'  {name} ({size_mb:.1f} MB)...')
     oss2.resumable_upload(bucket, key, f, part_size=10*1024*1024, num_threads=3)
 print('  OSS upload complete')
+
+# Upload meta.json
+import json, urllib.parse
+v = '$NEW_VERSION'
+base = 'https://download.starapp.net/app-releases'
+meta = {
+    'version': v,
+    'mac_arm64': f'{base}/Inkess%20Claude%20Code%20CLI-{v}-arm64.dmg',
+    'mac_x64': f'{base}/Inkess%20Claude%20Code%20CLI-{v}.dmg',
+    'win_x64': f'{base}/{urllib.parse.quote(f\"Inkess Claude Code CLI Setup {v}.exe\")}',
+    'homebrew': 'brew tap gezhigang000/tap && brew install --cask inkess-claude-code-cli'
+}
+bucket.put_object('app-releases/meta.json', json.dumps(meta, ensure_ascii=False).encode())
+print('  meta.json updated')
 "
 else
   warn "Skipping OSS upload (no credentials in scripts/.env)"
