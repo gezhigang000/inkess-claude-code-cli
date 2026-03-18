@@ -85,7 +85,7 @@
     },
     "publish": {
       "provider": "generic",
-      "url": "https://inkess-install-file.oss-cn-beijing.aliyuncs.com/app-releases"
+      "url": "https://download.starapp.net/app-releases"
     }
   },
   "devDependencies": {

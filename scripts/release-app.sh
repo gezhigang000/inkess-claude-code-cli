@@ -137,10 +137,10 @@ cask "inkess-claude-code-cli" do
   version "$NEW_VERSION"
 
   if Hardware::CPU.arm?
-    url "https://inkess-install-file.oss-cn-beijing.aliyuncs.com/app-releases/Inkess%20Claude%20Code%20CLI-#{version}-arm64.dmg"
+    url "https://download.starapp.net/app-releases/Inkess%20Claude%20Code%20CLI-#{version}-arm64.dmg"
     sha256 "$ARM64_SHA"
   else
-    url "https://inkess-install-file.oss-cn-beijing.aliyuncs.com/app-releases/Inkess%20Claude%20Code%20CLI-#{version}.dmg"
+    url "https://download.starapp.net/app-releases/Inkess%20Claude%20Code%20CLI-#{version}.dmg"
     sha256 "$X64_SHA"
   end
 
