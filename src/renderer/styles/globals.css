@@ -25,8 +25,8 @@
 }
 
 [data-theme="light"] {
-  --bg-primary: #F8F7F4;
-  --bg-secondary: #EFEDE8;
+  --bg-primary: #FAFAF8;
+  --bg-secondary: #F0EDE6;
   --bg-tertiary: #E6E3DC;
   --bg-hover: #DDD9D0;
   --bg-active: #D0CBC0;

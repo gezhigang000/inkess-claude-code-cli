@@ -4,9 +4,12 @@ export const en = {
   'app.connected': 'Connected',
   'app.balance': 'Balance',
 
-  // Titlebar
-  'toolbar.openInFinder': 'Open in {fileManager}',
-  'toolbar.openInIde': 'Open in {ide}',
+  // Tab context menu
+  'tab.openInFinder': 'Open in Finder',
+  'tab.openInExplorer': 'Open in Explorer',
+  'tab.openInIde': 'Open in {ide}',
+  'tab.copyPath': 'Copy Path',
+  'tab.closeTab': 'Close Tab',
 
   // Login
   'login.title': 'Inkess Claude Code CLI',
@@ -75,6 +78,8 @@ export const en = {
   'settings.languageEn': 'English',
   'settings.languageLabel': 'Display Language',
   'settings.languageHint': 'Choose the display language for the app',
+  'settings.about': 'About',
+  'settings.version': 'Version',
 
   // Welcome
   'welcome.openFolder': 'Open Working Directory',

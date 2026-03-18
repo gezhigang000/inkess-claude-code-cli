@@ -1,7 +1,8 @@
 {
   "name": "inkess-claude-code-cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Inkess Claude Code CLI — Zero-config Claude Code terminal for Inkess users",
+  "author": "Inkess",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -68,11 +69,7 @@
             "x64"
           ]
         }
-      ],
-      "signingHashAlgorithms": [
-        "sha256"
-      ],
-      "sign": null
+      ]
     },
     "nsis": {
       "oneClick": false,

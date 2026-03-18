@@ -10,7 +10,7 @@ interface SettingsPanelProps {
 
 export function SettingsPanel({ onClose, onLogout }: SettingsPanelProps) {
   const { user, balance, setBalance } = useAuthStore()
-  const [activeSection, setActiveSection] = useState<'account' | 'appearance' | 'language'>('account')
+  const [activeSection, setActiveSection] = useState<'account' | 'appearance' | 'language' | 'about'>('account')
   const { fontSize, language, theme, setFontSize, setLanguage, setTheme } = useSettingsStore()
   const { t } = useI18n()
 
@@ -33,6 +33,7 @@ export function SettingsPanel({ onClose, onLogout }: SettingsPanelProps) {
     { id: 'account' as const, label: t('settings.account'), icon: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2' },
     { id: 'appearance' as const, label: t('settings.appearance'), icon: 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z' },
     { id: 'language' as const, label: t('settings.language'), icon: 'M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129' },
+    { id: 'about' as const, label: t('settings.about'), icon: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
   ]
 
   return (
@@ -80,6 +81,9 @@ export function SettingsPanel({ onClose, onLogout }: SettingsPanelProps) {
           )}
           {activeSection === 'language' && (
             <LanguageSection language={language} onChange={setLanguage} />
+          )}
+          {activeSection === 'about' && (
+            <AboutSection />
           )}
         </div>
       </div>
@@ -275,6 +279,34 @@ function LanguageSection({ language, onChange }: { language: 'auto' | 'zh' | 'en
             <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>{opt.label}</span>
           </div>
         ))}
+      </SettingsGroup>
+    </div>
+  )
+}
+
+function AboutSection() {
+  const { t } = useI18n()
+  const [appVersion, setAppVersion] = useState('')
+  const [cliVersion, setCliVersion] = useState<string | null>(null)
+
+  useEffect(() => {
+    window.api.app.getVersion().then(setAppVersion)
+    window.api.cli.getInfo().then(info => setCliVersion(info.version))
+  }, [])
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <SettingsGroup title={t('settings.version')}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 10px', background: 'var(--bg-tertiary)', borderRadius: 6 }}>
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Inkess Claude Code</span>
+            <span style={{ fontSize: 13, color: 'var(--text-primary)', fontFamily: 'var(--font-mono, monospace)' }}>v{appVersion}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 10px', background: 'var(--bg-tertiary)', borderRadius: 6 }}>
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Claude Code CLI</span>
+            <span style={{ fontSize: 13, color: 'var(--text-primary)', fontFamily: 'var(--font-mono, monospace)' }}>{cliVersion ? `v${cliVersion}` : '—'}</span>
+          </div>
+        </div>
       </SettingsGroup>
     </div>
   )

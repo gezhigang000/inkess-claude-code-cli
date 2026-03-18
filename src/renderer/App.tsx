@@ -202,9 +202,7 @@ export function App() {
     }
   }, [setCliInfo])
 
-  const activeTab = tabs.find((t) => t.id === activeTabId)
-
-  const titleBar = (
+  const plainTitleBar = (
     <div
       className="titlebar-drag"
       style={{
@@ -216,9 +214,6 @@ export function App() {
       {isMac && <div style={{ width: 70 }} />}
       <div style={{ flex: 1, textAlign: 'center', fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>
         {t('app.title')}
-        {phase === 'ready' && activeTab && (
-          <span> — {shortenPath(activeTab.cwd)}</span>
-        )}
       </div>
       {isMac && <div style={{ width: 70 }} />}
     </div>
@@ -227,7 +222,7 @@ export function App() {
   if (phase === 'login') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-        {titleBar}
+        {plainTitleBar}
         <LoginScreen onLoginSuccess={handleLoginSuccess} />
       </div>
     )
@@ -236,19 +231,21 @@ export function App() {
   if (phase === 'checking' || phase === 'installing' || phase === 'error') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-        {titleBar}
+        {plainTitleBar}
         <SetupScreen />
       </div>
     )
   }
 
-  // Count active toasts for stacking
-  const toastCount = (updateInfo ? 1 : 0) +
-    (appUpdateStatus && (appUpdateStatus.type === 'available' || appUpdateStatus.type === 'downloaded') ? 1 : 0)
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      {titleBar}
+      <TitleTabBar
+        tabs={tabs}
+        activeTabId={activeTabId}
+        onSelect={setActiveTab}
+        onClose={handleCloseTab}
+        onNew={handleSelectDirectory}
+      />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <Sidebar
           onSettings={() => { setShowSettings(true); window.api.analytics?.track('settings_open') }}
@@ -266,14 +263,6 @@ export function App() {
             <WelcomeScreen onOpenFolder={handleSelectDirectory} onOpenProject={handleNewTab} />
           ) : (
             <>
-              <TabBar
-                tabs={tabs}
-                activeTabId={activeTabId}
-                onSelect={setActiveTab}
-                onClose={handleCloseTab}
-                onNew={handleSelectDirectory}
-              />
-              <Toolbar tabs={tabs} activeTabId={activeTabId} />
               <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
                 {tabs.map((tab) => (
                   <TerminalView key={tab.id} ptyId={tab.ptyId} isActive={tab.id === activeTabId} />
@@ -342,28 +331,40 @@ export function getRecentProjects(): string[] {
 
 import type { TerminalTab } from './stores/terminal'
 
-function TabBar({ tabs, activeTabId, onSelect, onClose, onNew }: {
+function TitleTabBar({ tabs, activeTabId, onSelect, onClose, onNew }: {
   tabs: TerminalTab[]; activeTabId: string | null
   onSelect: (id: string) => void; onClose: (id: string) => void; onNew: () => void
 }) {
   const [hoveredTab, setHoveredTab] = useState<string | null>(null)
+  const [contextMenu, setContextMenu] = useState<{ tabId: string; x: number; y: number } | null>(null)
 
   return (
-    <div style={{
-      height: 36, background: 'var(--bg-secondary)', display: 'flex',
-      alignItems: 'stretch', borderBottom: '1px solid var(--border)', flexShrink: 0, padding: '0 8px'
-    }}>
+    <div
+      className="titlebar-drag"
+      style={{
+        height: 38, background: 'var(--bg-secondary)', display: 'flex',
+        alignItems: 'stretch', borderBottom: '1px solid var(--border)', flexShrink: 0,
+        padding: '0 8px'
+      }}
+    >
+      {isMac && <div style={{ width: 70 }} />}
       {tabs.map((tab) => {
         const isActive = tab.id === activeTabId
         const isHovered = tab.id === hoveredTab
         return (
           <div
             key={tab.id}
+            className="titlebar-no-drag"
             onClick={() => onSelect(tab.id)}
+            onContextMenu={(e) => {
+              e.preventDefault()
+              setContextMenu({ tabId: tab.id, x: e.clientX, y: e.clientY })
+            }}
             onMouseEnter={() => setHoveredTab(tab.id)}
             onMouseLeave={() => setHoveredTab(null)}
+            title={shortenPath(tab.cwd)}
             style={{
-              display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', fontSize: 12,
+              display: 'flex', alignItems: 'center', gap: 6, padding: '0 12px', fontSize: 12,
               color: isActive ? 'var(--text-primary)' : 'var(--text-muted)',
               cursor: 'pointer',
               borderBottom: isActive ? '2px solid var(--accent)' : '2px solid transparent'
@@ -390,53 +391,97 @@ function TabBar({ tabs, activeTabId, onSelect, onClose, onNew }: {
           </div>
         )
       })}
-      <div onClick={onNew} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16 }}>+</div>
+      <div
+        className="titlebar-no-drag"
+        onClick={onNew}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16 }}
+      >+</div>
+      <div style={{ flex: 1 }} />
+      {!isMac && <div style={{ width: 140 }} />}
+      {contextMenu && (
+        <TabContextMenu
+          tab={tabs.find(t => t.id === contextMenu.tabId)!}
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => { onClose(contextMenu.tabId); setContextMenu(null) }}
+          onDismiss={() => setContextMenu(null)}
+        />
+      )}
     </div>
   )
 }
 
-function Toolbar({ tabs, activeTabId }: { tabs: TerminalTab[]; activeTabId: string | null }) {
-  const activeTab = tabs.find((t) => t.id === activeTabId)
-  const ideChoice = useSettingsStore((s) => s.ideChoice)
+function TabContextMenu({ tab, x, y, onClose, onDismiss }: {
+  tab: TerminalTab; x: number; y: number
+  onClose: () => void; onDismiss: () => void
+}) {
   const { t } = useI18n()
-  if (!activeTab) return null
+  const ideChoice = useSettingsStore((s) => s.ideChoice)
+  const [hoveredItem, setHoveredItem] = useState<string | null>(null)
 
   const ideScheme = IDE_SCHEMES[ideChoice] || 'vscode://'
   const ideName = ideChoice === 'vscode' ? 'VS Code' : ideChoice === 'cursor' ? 'Cursor' : 'Zed'
 
+  useEffect(() => {
+    const handler = () => onDismiss()
+    window.addEventListener('click', handler)
+    return () => window.removeEventListener('click', handler)
+  }, [onDismiss])
+
+  const menuItems: { key: string; label: string; onClick: () => void; separator?: boolean }[] = [
+    {
+      key: 'finder',
+      label: isMac ? t('tab.openInFinder') : t('tab.openInExplorer'),
+      onClick: () => { window.api.shell.openPath(tab.cwd); onDismiss() }
+    },
+    {
+      key: 'ide',
+      label: t('tab.openInIde', { ide: ideName }),
+      onClick: () => { window.api.shell.openExternal(`${ideScheme}file/${tab.cwd}`); onDismiss() }
+    },
+    {
+      key: 'copy',
+      label: t('tab.copyPath'),
+      onClick: () => { window.api.clipboard.writeText(tab.cwd); onDismiss() }
+    },
+    {
+      key: 'close',
+      label: t('tab.closeTab'),
+      separator: true,
+      onClick: onClose
+    }
+  ]
+
   return (
-    <div style={{
-      height: 32, background: 'var(--bg-tertiary)', display: 'flex',
-      alignItems: 'center', gap: 8, padding: '0 12px',
-      borderBottom: '1px solid var(--border)', flexShrink: 0
-    }}>
-      <div
-        title={t('toolbar.openInFinder')}
-        onClick={() => window.api.shell.openPath(activeTab.cwd)}
-        style={{
-          fontFamily: 'var(--font-mono, monospace)', fontSize: 12, color: 'var(--text-secondary)',
-          display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer',
-          padding: '2px 6px', borderRadius: 4, transition: 'background 0.12s, color 0.12s',
-        }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)' }}
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.5">
-          <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
-        </svg>
-        {shortenPath(activeTab.cwd)}
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ opacity: 0.5 }}>
-          <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
-          <polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
-        </svg>
-      </div>
-      <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
-        <ToolbarButton title={t('toolbar.openInIde', { ide: ideName })} onClick={() => window.api.shell.openExternal(`${ideScheme}file/${activeTab.cwd}`)}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" />
-          </svg>
-        </ToolbarButton>
-      </div>
+    <div
+      style={{
+        position: 'fixed', left: x, top: y, zIndex: 9999,
+        background: 'var(--bg-secondary)', border: '1px solid var(--border)',
+        borderRadius: 6, padding: '4px 0', minWidth: 180,
+        boxShadow: '0 4px 16px rgba(0,0,0,0.4)', fontSize: 13
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {menuItems.map((item) => (
+        <div key={item.key}>
+          {item.separator && (
+            <div style={{ height: 1, background: 'var(--border)', margin: '4px 8px' }} />
+          )}
+          <div
+            onClick={item.onClick}
+            onMouseEnter={() => setHoveredItem(item.key)}
+            onMouseLeave={() => setHoveredItem(null)}
+            style={{
+              padding: '6px 16px', cursor: 'pointer',
+              color: 'var(--text-primary)',
+              background: hoveredItem === item.key ? 'var(--bg-hover)' : 'transparent',
+              transition: 'background 0.1s'
+            }}
+          >
+            {item.label}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
@@ -459,23 +504,6 @@ function StatusBar() {
         {t('app.balance')}: ¥{(balance / 100).toFixed(2)}
       </div>
     </div>
-  )
-}
-
-function ToolbarButton({ title, onClick, children }: { title: string; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      title={title}
-      onClick={onClick}
-      style={{
-        width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        borderRadius: 4, color: 'var(--text-muted)', cursor: 'pointer', border: 'none', background: 'transparent'
-      }}
-      onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
-      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)' }}
-    >
-      {children}
-    </button>
   )
 }
 

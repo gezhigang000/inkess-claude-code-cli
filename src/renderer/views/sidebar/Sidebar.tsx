@@ -22,7 +22,7 @@ export function Sidebar({ onSettings, onOpenProject }: SidebarProps) {
   return (
     <aside
       style={{
-        width: 260,
+        width: 200,
         background: 'var(--bg-secondary)',
         borderRight: '1px solid var(--border)',
         display: 'flex',
@@ -31,7 +31,7 @@ export function Sidebar({ onSettings, onOpenProject }: SidebarProps) {
       }}
     >
       {/* Recent Projects */}
-      <div style={{ padding: 16, flex: 1, overflowY: 'auto' }}>
+      <div style={{ padding: '12px 12px', flex: 1, overflowY: 'auto' }}>
         <div
           style={{
             fontSize: 11,
@@ -89,13 +89,13 @@ export function Sidebar({ onSettings, onOpenProject }: SidebarProps) {
       </div>
 
       {/* Settings */}
-      <div style={{ padding: 16, borderTop: '1px solid var(--border)' }}>
+      <div style={{ padding: '8px 12px', borderTop: '1px solid var(--border)' }}>
         <div
           onClick={onSettings}
           onMouseEnter={() => setHoveredAction('settings')}
           onMouseLeave={() => setHoveredAction(null)}
           style={{
-            display: 'flex', alignItems: 'center', gap: 10, padding: 8,
+            display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px',
             borderRadius: 6, cursor: 'pointer', fontSize: 13,
             color: hoveredAction === 'settings' ? 'var(--text-primary)' : 'var(--text-secondary)',
             background: hoveredAction === 'settings' ? 'var(--bg-hover)' : 'transparent',
@@ -113,7 +113,7 @@ export function Sidebar({ onSettings, onOpenProject }: SidebarProps) {
       {/* Footer */}
       <div
         style={{
-          padding: '12px 16px',
+          padding: '8px 12px',
           borderTop: '1px solid var(--border)',
           display: 'flex',
           alignItems: 'center',

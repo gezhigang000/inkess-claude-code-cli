@@ -130,6 +130,14 @@ const api = {
   analytics: {
     track: (event: string, props?: Record<string, unknown>) =>
       ipcRenderer.send('analytics:track', { event, props })
+  },
+
+  clipboard: {
+    writeText: (text: string) => ipcRenderer.invoke('clipboard:writeText', text)
+  },
+
+  app: {
+    getVersion: () => ipcRenderer.invoke('app:getVersion') as Promise<string>
   }
 }
 

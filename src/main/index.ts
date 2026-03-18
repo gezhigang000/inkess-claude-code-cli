@@ -1,5 +1,5 @@
 import log from './logger'
-import { app, BrowserWindow, ipcMain, shell, dialog, Menu, session, nativeImage } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, dialog, Menu, session, nativeImage, clipboard } from 'electron'
 import { join } from 'path'
 import { PtyManager } from './pty/pty-manager'
 import { CliManager } from './cli/cli-manager'
@@ -217,6 +217,16 @@ ipcMain.on('log:error', (_event, { message, stack }: { message: string; stack?: 
 ipcMain.handle('appUpdate:check', () => checkForAppUpdate())
 ipcMain.handle('appUpdate:download', () => downloadAppUpdate())
 ipcMain.handle('appUpdate:install', () => installAppUpdate())
+
+// IPC: Clipboard
+ipcMain.handle('clipboard:writeText', (_event, text: string) => {
+  clipboard.writeText(text)
+})
+
+// IPC: App version
+ipcMain.handle('app:getVersion', () => {
+  return app.getVersion()
+})
 
 // IPC: Analytics (renderer → main)
 ipcMain.on('analytics:track', (_event, { event, props }: { event: string; props?: Record<string, unknown> }) => {

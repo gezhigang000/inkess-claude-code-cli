@@ -6,9 +6,12 @@ export const zh: Record<TranslationKey, string> = {
   'app.connected': '已连接',
   'app.balance': '余额',
 
-  // Titlebar
-  'toolbar.openInFinder': '在 {fileManager} 中打开',
-  'toolbar.openInIde': '在 {ide} 中打开',
+  // Tab context menu
+  'tab.openInFinder': '在 Finder 中打开',
+  'tab.openInExplorer': '在资源管理器中打开',
+  'tab.openInIde': '在 {ide} 中打开',
+  'tab.copyPath': '复制路径',
+  'tab.closeTab': '关闭标签页',
 
   // Login
   'login.title': 'Inkess Claude Code CLI',
@@ -77,6 +80,8 @@ export const zh: Record<TranslationKey, string> = {
   'settings.languageEn': 'English',
   'settings.languageLabel': '界面语言',
   'settings.languageHint': '选择应用的显示语言',
+  'settings.about': '关于',
+  'settings.version': '版本',
 
   // Welcome
   'welcome.openFolder': '打开工作目录',
