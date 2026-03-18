@@ -1,13 +1,22 @@
+import { useState, useEffect } from 'react'
 import { useTerminalStore } from '../../stores/terminal'
+import { getRecentProjects } from '../../App'
 
 interface SidebarProps {
   onSelectDirectory?: () => void
   onSettings?: () => void
+  onOpenProject?: (cwd: string) => void
 }
 
-export function Sidebar({ onSelectDirectory, onSettings }: SidebarProps) {
+export function Sidebar({ onSelectDirectory, onSettings, onOpenProject }: SidebarProps) {
   const { tabs } = useTerminalStore()
-  const recentDirs = [...new Set(tabs.map((t) => t.cwd))]
+  const [hoveredDir, setHoveredDir] = useState<string | null>(null)
+  const [hoveredAction, setHoveredAction] = useState<string | null>(null)
+
+  // Merge open tab dirs + persisted recent projects, deduplicated
+  const openDirs = tabs.map((t) => t.cwd)
+  const recentDirs = getRecentProjects()
+  const allDirs = [...new Set([...openDirs, ...recentDirs])]
 
   return (
     <aside
@@ -21,7 +30,7 @@ export function Sidebar({ onSelectDirectory, onSettings }: SidebarProps) {
       }}
     >
       {/* Recent Projects */}
-      <div style={{ padding: 16, flex: 1 }}>
+      <div style={{ padding: 16, flex: 1, overflowY: 'auto' }}>
         <div
           style={{
             fontSize: 11,
@@ -34,36 +43,48 @@ export function Sidebar({ onSelectDirectory, onSettings }: SidebarProps) {
         >
           Recent Projects
         </div>
-        {recentDirs.length === 0 && (
+        {allDirs.length === 0 && (
           <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '8px 0' }}>
             No projects yet
           </div>
         )}
-        {recentDirs.map((dir) => (
-          <div
-            key={dir}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              padding: 8,
-              borderRadius: 6,
-              cursor: 'pointer',
-              fontSize: 13,
-              color: 'var(--text-secondary)'
-            }}
-          >
-            <svg
-              width="16" height="16" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" strokeWidth="1.5"
+        {allDirs.map((dir) => {
+          const isOpen = openDirs.includes(dir)
+          const isHovered = hoveredDir === dir
+          return (
+            <div
+              key={dir}
+              onClick={() => onOpenProject?.(dir)}
+              onMouseEnter={() => setHoveredDir(dir)}
+              onMouseLeave={() => setHoveredDir(null)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: 8,
+                borderRadius: 6,
+                cursor: 'pointer',
+                fontSize: 13,
+                color: isHovered ? 'var(--text-primary)' : 'var(--text-secondary)',
+                background: isHovered ? 'var(--bg-hover)' : 'transparent',
+                transition: 'background 0.12s, color 0.12s',
+              }}
             >
-              <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
-            </svg>
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {dir.replace(/^\/Users\/[^/]+/, '~')}
-            </span>
-          </div>
-        ))}
+              <svg
+                width="16" height="16" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="1.5"
+              >
+                <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
+              </svg>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                {dir.replace(/^\/Users\/[^/]+/, '~')}
+              </span>
+              {isOpen && (
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)', flexShrink: 0 }} />
+              )}
+            </div>
+          )
+        })}
       </div>
 
       {/* Open Folder + Settings */}
@@ -71,6 +92,8 @@ export function Sidebar({ onSelectDirectory, onSettings }: SidebarProps) {
         {onSelectDirectory && (
           <div
             onClick={onSelectDirectory}
+            onMouseEnter={() => setHoveredAction('open')}
+            onMouseLeave={() => setHoveredAction(null)}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -79,8 +102,10 @@ export function Sidebar({ onSelectDirectory, onSettings }: SidebarProps) {
               borderRadius: 6,
               cursor: 'pointer',
               fontSize: 13,
-              color: 'var(--text-secondary)',
-              marginBottom: 4
+              color: hoveredAction === 'open' ? 'var(--text-primary)' : 'var(--text-secondary)',
+              background: hoveredAction === 'open' ? 'var(--bg-hover)' : 'transparent',
+              marginBottom: 4,
+              transition: 'background 0.12s, color 0.12s',
             }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -93,9 +118,14 @@ export function Sidebar({ onSelectDirectory, onSettings }: SidebarProps) {
         )}
         <div
           onClick={onSettings}
+          onMouseEnter={() => setHoveredAction('settings')}
+          onMouseLeave={() => setHoveredAction(null)}
           style={{
             display: 'flex', alignItems: 'center', gap: 10, padding: 8,
-            borderRadius: 6, cursor: 'pointer', fontSize: 13, color: 'var(--text-secondary)'
+            borderRadius: 6, cursor: 'pointer', fontSize: 13,
+            color: hoveredAction === 'settings' ? 'var(--text-primary)' : 'var(--text-secondary)',
+            background: hoveredAction === 'settings' ? 'var(--bg-hover)' : 'transparent',
+            transition: 'background 0.12s, color 0.12s',
           }}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">

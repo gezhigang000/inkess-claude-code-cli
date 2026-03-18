@@ -1,4 +1,4 @@
-import { app } from 'electron'
+import { app, safeStorage } from 'electron'
 import { join } from 'path'
 import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from 'fs'
 import log from '../logger'
@@ -53,19 +53,54 @@ interface AuthData {
 
 export class AuthManager {
   private dataDir: string
-  private authFile: string
+  private encFile: string
+  private legacyFile: string
   private authData: AuthData | null = null
+  private useEncryption: boolean
 
   constructor() {
     this.dataDir = join(app.getPath('userData'), 'auth')
-    this.authFile = join(this.dataDir, 'session.json')
+    this.encFile = join(this.dataDir, 'session.enc')
+    this.legacyFile = join(this.dataDir, 'session.json')
+    this.useEncryption = safeStorage.isEncryptionAvailable()
+    this.migrate()
     this.load()
+  }
+
+  /** Migrate legacy plaintext session.json → encrypted session.enc */
+  private migrate(): void {
+    try {
+      if (!existsSync(this.legacyFile)) return
+      if (existsSync(this.encFile)) {
+        // Already migrated, just remove legacy file
+        unlinkSync(this.legacyFile)
+        return
+      }
+      const raw = readFileSync(this.legacyFile, 'utf-8')
+      JSON.parse(raw) // validate JSON
+      if (this.useEncryption) {
+        if (!existsSync(this.dataDir)) mkdirSync(this.dataDir, { recursive: true })
+        const encrypted = safeStorage.encryptString(raw)
+        writeFileSync(this.encFile, encrypted)
+      } else {
+        // No encryption available, keep as-is (will be read from legacy path)
+        return
+      }
+      unlinkSync(this.legacyFile)
+      log.info('Auth: migrated session to encrypted storage')
+    } catch (err) {
+      log.error('Auth: migration failed', err)
+    }
   }
 
   private load(): void {
     try {
-      if (existsSync(this.authFile)) {
-        const raw = readFileSync(this.authFile, 'utf-8')
+      if (this.useEncryption && existsSync(this.encFile)) {
+        const buffer = readFileSync(this.encFile)
+        const raw = safeStorage.decryptString(buffer)
+        this.authData = JSON.parse(raw)
+      } else if (existsSync(this.legacyFile)) {
+        const raw = readFileSync(this.legacyFile, 'utf-8')
         this.authData = JSON.parse(raw)
       }
     } catch {
@@ -78,14 +113,23 @@ export class AuthManager {
       mkdirSync(this.dataDir, { recursive: true })
     }
     if (this.authData) {
-      writeFileSync(this.authFile, JSON.stringify(this.authData), 'utf-8')
+      const json = JSON.stringify(this.authData)
+      if (this.useEncryption) {
+        const encrypted = safeStorage.encryptString(json)
+        writeFileSync(this.encFile, encrypted)
+      } else {
+        writeFileSync(this.legacyFile, json, 'utf-8')
+      }
     }
   }
 
   private clear(): void {
     this.authData = null
     try {
-      if (existsSync(this.authFile)) unlinkSync(this.authFile)
+      if (existsSync(this.encFile)) unlinkSync(this.encFile)
+    } catch { /* ignore */ }
+    try {
+      if (existsSync(this.legacyFile)) unlinkSync(this.legacyFile)
     } catch { /* ignore */ }
   }
 

@@ -124,6 +124,11 @@ const api = {
       ipcRenderer.on('appUpdate:status', listener)
       return () => ipcRenderer.removeListener('appUpdate:status', listener)
     }
+  },
+
+  analytics: {
+    track: (event: string, props?: Record<string, unknown>) =>
+      ipcRenderer.send('analytics:track', { event, props })
   }
 }
 

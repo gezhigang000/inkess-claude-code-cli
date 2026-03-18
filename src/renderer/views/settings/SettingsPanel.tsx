@@ -1,15 +1,16 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuthStore } from '../../stores/auth'
+import { useSettingsStore } from '../../stores/settings'
 
 interface SettingsPanelProps {
   onClose: () => void
+  onLogout: () => void
 }
 
-export function SettingsPanel({ onClose }: SettingsPanelProps) {
-  const { user, balance, setBalance, logout } = useAuthStore()
+export function SettingsPanel({ onClose, onLogout }: SettingsPanelProps) {
+  const { user, balance, setBalance } = useAuthStore()
   const [activeSection, setActiveSection] = useState<'account' | 'appearance' | 'ide' | 'network'>('account')
-  const [fontSize, setFontSize] = useState(14)
-  const [ideChoice, setIdeChoice] = useState('vscode')
+  const { fontSize, ideChoice, proxyUrl, setFontSize, setIdeChoice, setProxyUrl } = useSettingsStore()
 
   useEffect(() => {
     window.api.auth.getBalance().then(({ balance: b }) => {
@@ -17,12 +18,14 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     })
   }, [setBalance])
 
-  const handleLogout = () => {
-    window.api.auth.logout()
-    logout()
-    onClose()
-    location.reload()
-  }
+  // ESC to close
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
 
   const sections = [
     { id: 'account' as const, label: 'Account', icon: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2' },
@@ -69,7 +72,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
           </div>
 
           {activeSection === 'account' && (
-            <AccountSection user={user} balance={balance} onLogout={handleLogout} />
+            <AccountSection user={user} balance={balance} onLogout={onLogout} />
           )}
           {activeSection === 'appearance' && (
             <AppearanceSection fontSize={fontSize} onFontSizeChange={setFontSize} />
@@ -77,11 +80,26 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
           {activeSection === 'ide' && (
             <IdeSection choice={ideChoice} onChange={setIdeChoice} />
           )}
-          {activeSection === 'network' && <NetworkSection />}
+          {activeSection === 'network' && (
+            <NetworkSection proxyUrl={proxyUrl} onProxyChange={setProxyUrl} />
+          )}
         </div>
       </div>
     </div>
   )
+}
+
+// --- Shared styles ---
+
+const focusableInputStyle: React.CSSProperties = {
+  width: '100%', padding: '8px 10px', background: 'var(--bg-tertiary)',
+  border: '1px solid var(--border)', borderRadius: 6,
+  color: 'var(--text-primary)', fontSize: 13, outline: 'none', boxSizing: 'border-box',
+  transition: 'border-color 0.15s',
+}
+
+const disabledBtnBase: React.CSSProperties = {
+  cursor: 'not-allowed', opacity: 0.5,
 }
 
 // --- Section Components ---
@@ -157,26 +175,22 @@ function ChangePasswordSection() {
     }
   }
 
-  const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '8px 10px', background: 'var(--bg-tertiary)',
-    border: '1px solid var(--border)', borderRadius: 6,
-    color: 'var(--text-primary)', fontSize: 13, outline: 'none', boxSizing: 'border-box'
-  }
+  const disabled = loading || !currentPwd || !newPwd || !confirmPwd
 
   return (
     <SettingsGroup title="Change Password">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <input type="password" value={currentPwd} onChange={e => setCurrentPwd(e.target.value)} placeholder="Current password" style={inputStyle} />
-        <input type="password" value={newPwd} onChange={e => setNewPwd(e.target.value)} placeholder="New password" style={inputStyle} />
-        <input type="password" value={confirmPwd} onChange={e => setConfirmPwd(e.target.value)} placeholder="Confirm new password" style={inputStyle} />
+        <FocusInput type="password" value={currentPwd} onChange={e => setCurrentPwd(e.target.value)} placeholder="Current password" />
+        <FocusInput type="password" value={newPwd} onChange={e => setNewPwd(e.target.value)} placeholder="New password" />
+        <FocusInput type="password" value={confirmPwd} onChange={e => setConfirmPwd(e.target.value)} placeholder="Confirm new password" />
         {msg && <div style={{ fontSize: 12, color: msg.type === 'error' ? 'var(--error-text)' : 'var(--success)' }}>{msg.text}</div>}
         <button
           onClick={handleSubmit}
-          disabled={loading || !currentPwd || !newPwd || !confirmPwd}
+          disabled={disabled}
           style={{
             alignSelf: 'flex-start', padding: '6px 14px', background: 'var(--accent)', color: '#fff',
-            border: 'none', borderRadius: 6, fontSize: 12, cursor: loading ? 'wait' : 'pointer',
-            opacity: (!currentPwd || !newPwd || !confirmPwd) ? 0.5 : 1
+            border: 'none', borderRadius: 6, fontSize: 12,
+            ...(disabled ? disabledBtnBase : { cursor: 'pointer' }),
           }}
         >
           {loading ? 'Changing...' : 'Change Password'}
@@ -237,20 +251,17 @@ function IdeSection({ choice, onChange }: { choice: string; onChange: (v: string
   )
 }
 
-function NetworkSection() {
+function NetworkSection({ proxyUrl, onProxyChange }: { proxyUrl: string; onProxyChange: (v: string) => void }) {
   return (
     <SettingsGroup title="HTTP Proxy">
       <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>
         Set a proxy for API requests (leave empty to use system proxy)
       </div>
-      <input
+      <FocusInput
         type="text"
+        value={proxyUrl}
+        onChange={(e) => onProxyChange(e.target.value)}
         placeholder="http://127.0.0.1:7890"
-        style={{
-          width: '100%', padding: '8px 10px', background: 'var(--bg-tertiary)',
-          border: '1px solid var(--border)', borderRadius: 6,
-          color: 'var(--text-primary)', fontSize: 13, outline: 'none'
-        }}
       />
     </SettingsGroup>
   )
@@ -262,5 +273,17 @@ function SettingsGroup({ title, children }: { title: string; children: React.Rea
       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>{title}</div>
       {children}
     </div>
+  )
+}
+
+/** Input with visible focus ring */
+function FocusInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      {...props}
+      style={{ ...focusableInputStyle, ...props.style }}
+      onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; props.onFocus?.(e) }}
+      onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; props.onBlur?.(e) }}
+    />
   )
 }

@@ -3,15 +3,26 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // Mock electron
 vi.mock('electron', () => ({
   app: { getPath: () => '/tmp/test-userdata' },
+  safeStorage: {
+    isEncryptionAvailable: vi.fn(() => true),
+    encryptString: vi.fn((str: string) => Buffer.from(`ENC:${str}`)),
+    decryptString: vi.fn((buf: Buffer) => buf.toString().replace('ENC:', '')),
+  },
 }))
 
 // Mock fs
+const mockExistsSync = vi.fn(() => false)
+const mockReadFileSync = vi.fn()
+const mockWriteFileSync = vi.fn()
+const mockMkdirSync = vi.fn()
+const mockUnlinkSync = vi.fn()
+
 vi.mock('fs', () => ({
-  existsSync: vi.fn(() => false),
-  readFileSync: vi.fn(),
-  writeFileSync: vi.fn(),
-  mkdirSync: vi.fn(),
-  unlinkSync: vi.fn(),
+  existsSync: (...args: any[]) => mockExistsSync(...args),
+  readFileSync: (...args: any[]) => mockReadFileSync(...args),
+  writeFileSync: (...args: any[]) => mockWriteFileSync(...args),
+  mkdirSync: (...args: any[]) => mockMkdirSync(...args),
+  unlinkSync: (...args: any[]) => mockUnlinkSync(...args),
 }))
 
 // Mock logger
@@ -24,14 +35,117 @@ const mockFetch = vi.fn()
 vi.stubGlobal('fetch', mockFetch)
 
 import { AuthManager } from '@main/auth/auth-manager'
-import { existsSync, readFileSync } from 'fs'
+import { safeStorage } from 'electron'
 
 describe('AuthManager', () => {
   let auth: AuthManager
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mockExistsSync.mockReturnValue(false)
+    vi.mocked(safeStorage.isEncryptionAvailable).mockReturnValue(true)
     auth = new AuthManager()
+  })
+
+  describe('encrypted storage', () => {
+    it('saves encrypted data when safeStorage is available', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          token: 'test-token',
+          user: { id: 1, email: 'test@test.com', username: 'test', balance: 100 },
+        }),
+      })
+
+      await auth.login('test@test.com', 'password')
+
+      expect(safeStorage.encryptString).toHaveBeenCalled()
+      expect(mockWriteFileSync).toHaveBeenCalledWith(
+        expect.stringContaining('session.enc'),
+        expect.any(Buffer)
+      )
+    })
+
+    it('loads encrypted data on construction', () => {
+      const authData = { token: 'tok', user: { id: 1, email: 'a@b.com', username: 'a', balance: 0 } }
+      const encrypted = Buffer.from(`ENC:${JSON.stringify(authData)}`)
+
+      mockExistsSync.mockImplementation((path: string) =>
+        typeof path === 'string' && path.endsWith('session.enc')
+      )
+      mockReadFileSync.mockReturnValue(encrypted)
+
+      const mgr = new AuthManager()
+      expect(safeStorage.decryptString).toHaveBeenCalledWith(encrypted)
+      expect(mgr.isLoggedIn()).toBe(true)
+      expect(mgr.getToken()).toBe('tok')
+    })
+  })
+
+  describe('migration', () => {
+    it('migrates legacy session.json to session.enc', () => {
+      const authData = { token: 'old-tok', user: { id: 1, email: 'a@b.com', username: 'a', balance: 0 } }
+      const json = JSON.stringify(authData)
+
+      mockExistsSync.mockImplementation((path: string) =>
+        typeof path === 'string' && path.endsWith('session.json')
+      )
+      mockReadFileSync.mockReturnValue(json)
+
+      new AuthManager()
+
+      expect(safeStorage.encryptString).toHaveBeenCalledWith(json)
+      expect(mockWriteFileSync).toHaveBeenCalledWith(
+        expect.stringContaining('session.enc'),
+        expect.any(Buffer)
+      )
+      expect(mockUnlinkSync).toHaveBeenCalledWith(expect.stringContaining('session.json'))
+    })
+
+    it('removes legacy file if enc already exists', () => {
+      mockExistsSync.mockReturnValue(true) // both files exist
+
+      new AuthManager()
+
+      expect(mockUnlinkSync).toHaveBeenCalledWith(expect.stringContaining('session.json'))
+    })
+  })
+
+  describe('fallback (no encryption)', () => {
+    it('saves plaintext when safeStorage unavailable', async () => {
+      vi.mocked(safeStorage.isEncryptionAvailable).mockReturnValue(false)
+      auth = new AuthManager()
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          token: 'test-token',
+          user: { id: 1, email: 'test@test.com', username: 'test', balance: 100 },
+        }),
+      })
+
+      await auth.login('test@test.com', 'password')
+
+      expect(safeStorage.encryptString).not.toHaveBeenCalled()
+      expect(mockWriteFileSync).toHaveBeenCalledWith(
+        expect.stringContaining('session.json'),
+        expect.any(String),
+        'utf-8'
+      )
+    })
+
+    it('loads plaintext when safeStorage unavailable', () => {
+      vi.mocked(safeStorage.isEncryptionAvailable).mockReturnValue(false)
+      const authData = { token: 'tok', user: { id: 1, email: 'a@b.com', username: 'a', balance: 0 } }
+
+      mockExistsSync.mockImplementation((path: string) =>
+        typeof path === 'string' && path.endsWith('session.json')
+      )
+      mockReadFileSync.mockReturnValue(JSON.stringify(authData))
+
+      const mgr = new AuthManager()
+      expect(mgr.isLoggedIn()).toBe(true)
+    })
   })
 
   describe('login', () => {
@@ -123,7 +237,7 @@ describe('AuthManager', () => {
   })
 
   describe('logout', () => {
-    it('clears auth data', async () => {
+    it('clears auth data and removes files', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -134,9 +248,13 @@ describe('AuthManager', () => {
       await auth.login('a@b.com', 'pass')
       expect(auth.isLoggedIn()).toBe(true)
 
+      mockExistsSync.mockReturnValue(true)
       auth.logout()
       expect(auth.isLoggedIn()).toBe(false)
       expect(auth.getToken()).toBeNull()
+      // Should attempt to remove both enc and json files
+      expect(mockUnlinkSync).toHaveBeenCalledWith(expect.stringContaining('session.enc'))
+      expect(mockUnlinkSync).toHaveBeenCalledWith(expect.stringContaining('session.json'))
     })
   })
 

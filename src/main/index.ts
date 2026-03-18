@@ -5,6 +5,7 @@ import { PtyManager } from './pty/pty-manager'
 import { CliManager } from './cli/cli-manager'
 import { AuthManager } from './auth/auth-manager'
 import { checkForAppUpdate, downloadAppUpdate, installAppUpdate, onUpdateStatus } from './updater'
+import { Analytics } from './analytics'
 
 process.on('uncaughtException', (err) => log.error('Uncaught:', err))
 process.on('unhandledRejection', (reason) => log.error('Unhandled:', reason))
@@ -13,6 +14,8 @@ let mainWindow: BrowserWindow | null = null
 const ptyManager = new PtyManager()
 const cliManager = new CliManager()
 const authManager = new AuthManager()
+const analytics = new Analytics()
+analytics.setTokenGetter(() => authManager.getToken())
 
 function createWindow(): void {
   // Set dock/taskbar icon (especially needed in dev mode)
@@ -74,7 +77,9 @@ ipcMain.handle('auth:getStatus', () => {
 })
 
 ipcMain.handle('auth:login', async (_event, { login, password }: { login: string; password: string }) => {
-  return authManager.login(login, password)
+  const result = await authManager.login(login, password)
+  analytics.track(result.success ? 'login_success' : 'login_fail')
+  return result
 })
 
 ipcMain.handle('auth:logout', () => {
@@ -98,7 +103,9 @@ ipcMain.handle('auth:forgotPassword', async (_event, { email }: { email: string 
 ipcMain.handle('auth:changePassword', async (_event, { currentPassword, newPassword }: {
   currentPassword: string; newPassword: string
 }) => {
-  return authManager.changePassword(currentPassword, newPassword)
+  const result = await authManager.changePassword(currentPassword, newPassword)
+  if (result.success) analytics.track('password_change')
+  return result
 })
 
 ipcMain.handle('auth:getBalance', async () => {
@@ -119,6 +126,7 @@ ipcMain.handle('cli:install', async () => {
     await cliManager.install((step, progress) => {
       mainWindow?.webContents.send('cli:installProgress', { step, progress })
     })
+    analytics.track('cli_install')
     return { success: true }
   } catch (err) {
     return { success: false, error: (err as Error).message }
@@ -134,6 +142,7 @@ ipcMain.handle('cli:update', async () => {
     await cliManager.update((step, progress) => {
       mainWindow?.webContents.send('cli:updateProgress', { step, progress })
     })
+    analytics.track('cli_update')
     return { success: true }
   } catch (err) {
     return { success: false, error: (err as Error).message }
@@ -161,6 +170,7 @@ ipcMain.handle('pty:create', (_event, options: {
     ptyManager.onExit(id, (exitCode) => {
       mainWindow?.webContents.send('pty:exit', { id, exitCode })
     })
+    analytics.track('tab_create')
     return { id }
   } catch (err) {
     log.error('pty:create failed:', err)
@@ -178,6 +188,7 @@ ipcMain.on('pty:resize', (_event, { id, cols, rows }: { id: string; cols: number
 
 ipcMain.on('pty:kill', (_event, { id }: { id: string }) => {
   ptyManager.kill(id)
+  analytics.track('tab_close')
 })
 
 // IPC: Shell actions
@@ -206,6 +217,11 @@ ipcMain.handle('appUpdate:check', () => checkForAppUpdate())
 ipcMain.handle('appUpdate:download', () => downloadAppUpdate())
 ipcMain.handle('appUpdate:install', () => installAppUpdate())
 
+// IPC: Analytics (renderer → main)
+ipcMain.on('analytics:track', (_event, { event, props }: { event: string; props?: Record<string, unknown> }) => {
+  analytics.track(event, props)
+})
+
 // App lifecycle
 app.whenReady().then(() => {
   // CSP: production only (dev needs localhost + ws for HMR)
@@ -227,6 +243,11 @@ app.whenReady().then(() => {
   createWindow()
   setupMenu()
 
+  // Track app launch
+  analytics.track('app_launch', {
+    cli_version: cliManager.isInstalled() ? 'installed' : 'not_installed',
+  })
+
   // Forward app update status to renderer
   onUpdateStatus((status) => {
     mainWindow?.webContents.send('appUpdate:status', status)
@@ -243,6 +264,7 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
+  analytics.flushSync()
   ptyManager.killAll()
   if (process.platform !== 'darwin') {
     app.quit()

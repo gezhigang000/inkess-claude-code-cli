@@ -17,7 +17,6 @@ export function UpdateToast({ currentVersion, latestVersion, onUpdate, onDismiss
 
   return (
     <div style={{
-      position: 'fixed', bottom: 16, right: 16, zIndex: 200,
       width: 320, padding: 16, background: 'var(--bg-secondary)',
       border: '1px solid var(--border)', borderRadius: 10,
       boxShadow: '0 8px 24px rgba(0,0,0,0.4)'

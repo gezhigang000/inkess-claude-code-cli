@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Terminal } from 'xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebglAddon } from '@xterm/addon-webgl'
+import { useSettingsStore } from '../../stores/settings'
 
 interface TerminalViewProps {
   ptyId: string | null
@@ -12,6 +13,7 @@ export function TerminalView({ ptyId, isActive }: TerminalViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
+  const fontSize = useSettingsStore((s) => s.fontSize)
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -41,7 +43,7 @@ export function TerminalView({ ptyId, isActive }: TerminalViewProps) {
         brightWhite: '#FFFFFF'
       },
       fontFamily: '"JetBrains Mono", "Geist Mono", monospace',
-      fontSize: 14,
+      fontSize: useSettingsStore.getState().fontSize,
       lineHeight: 1.5,
       cursorBlink: true,
       cursorStyle: 'block',
@@ -94,6 +96,14 @@ export function TerminalView({ ptyId, isActive }: TerminalViewProps) {
       term.dispose()
     }
   }, [ptyId])
+
+  // React to fontSize changes from settings
+  useEffect(() => {
+    if (termRef.current) {
+      termRef.current.options.fontSize = fontSize
+      fitAddonRef.current?.fit()
+    }
+  }, [fontSize])
 
   // Focus terminal when tab becomes active
   useEffect(() => {

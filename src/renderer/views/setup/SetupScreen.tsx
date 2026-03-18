@@ -1,7 +1,7 @@
 import { useAppStore } from '../../stores/app'
 
 export function SetupScreen() {
-  const { phase, installSteps, installError } = useAppStore()
+  const { phase, installSteps, installError, installProgress } = useAppStore()
 
   const handleRetry = async () => {
     useAppStore.getState().setPhase('installing')
@@ -156,8 +156,8 @@ export function SetupScreen() {
                 height: '100%',
                 background: 'var(--accent)',
                 borderRadius: 2,
-                width: '60%',
-                animation: 'progress-move 2s ease-in-out infinite'
+                width: `${Math.max(installProgress, 10)}%`,
+                transition: 'width 0.3s ease',
               }}
             />
           </div>
@@ -198,9 +198,10 @@ export function SetupScreen() {
 
 /** Start the CLI install flow. Call from App after detecting CLI is not installed. */
 export async function startInstall(): Promise<boolean> {
-  const { setInstallSteps, setPhase, setCliInfo, setInstallError } = useAppStore.getState()
+  const { setInstallSteps, setPhase, setCliInfo, setInstallError, setInstallProgress } = useAppStore.getState()
 
   setPhase('installing')
+  setInstallProgress(10)
   setInstallSteps([
     { label: 'Checking environment', status: 'done' },
     { label: 'Downloading Claude Code CLI...', status: 'active' },
@@ -208,13 +209,15 @@ export async function startInstall(): Promise<boolean> {
   ])
 
   // Listen for progress
-  const removeListener = window.api.cli.onInstallProgress(({ step }) => {
+  const removeListener = window.api.cli.onInstallProgress(({ step, progress }) => {
+    setInstallProgress(Math.round(progress * 100))
     if (step.includes('Verifying')) {
       setInstallSteps([
         { label: 'Checking environment', status: 'done' },
         { label: 'Download complete', status: 'done' },
         { label: 'Verifying installation...', status: 'active' }
       ])
+      setInstallProgress(85)
     }
   })
 
@@ -222,6 +225,7 @@ export async function startInstall(): Promise<boolean> {
   removeListener()
 
   if (result.success) {
+    setInstallProgress(100)
     setInstallSteps([
       { label: 'Checking environment', status: 'done' },
       { label: 'Download complete', status: 'done' },

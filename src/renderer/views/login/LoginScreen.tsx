@@ -58,20 +58,34 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   )
 }
 
-const inputStyle: React.CSSProperties = {
+const inputBaseStyle: React.CSSProperties = {
   width: '100%', padding: '8px 12px', background: 'var(--bg-tertiary)',
   border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-primary)',
-  fontSize: 14, outline: 'none', boxSizing: 'border-box'
+  fontSize: 14, outline: 'none', boxSizing: 'border-box',
+  transition: 'border-color 0.15s',
 }
 
 const labelStyle: React.CSSProperties = {
   display: 'block', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6
 }
 
+/** Input with visible focus ring */
+function FocusInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      {...props}
+      style={{ ...inputBaseStyle, ...props.style }}
+      onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; props.onFocus?.(e) }}
+      onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; props.onBlur?.(e) }}
+    />
+  )
+}
+
 function LoginForm({ onSuccess, onError }: { onSuccess: () => void; onError: (e: string) => void }) {
   const [login, setLogin] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const disabled = loading || !login || !password
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -91,34 +105,36 @@ function LoginForm({ onSuccess, onError }: { onSuccess: () => void; onError: (e:
     <form onSubmit={handleSubmit}>
       <div style={{ marginBottom: 16 }}>
         <label style={labelStyle}>Email or Username</label>
-        <input
+        <FocusInput
           type="text" value={login} onChange={(e) => setLogin(e.target.value)}
           placeholder="you@example.com" autoFocus
-          style={inputStyle}
         />
       </div>
       <div style={{ marginBottom: 8 }}>
         <label style={labelStyle}>Password</label>
-        <input
+        <FocusInput
           type="password" value={password} onChange={(e) => setPassword(e.target.value)}
           placeholder="Enter your password"
-          style={inputStyle}
         />
       </div>
       <div style={{ textAlign: 'right', marginBottom: 20 }}>
-        <span
-          onClick={() => window.api.shell.openExternal('https://llm.starapp.net/zh/console/forgot-password')}
-          style={{ fontSize: 12, color: 'var(--accent)', cursor: 'pointer' }}
+        <a
+          href="#"
+          role="link"
+          tabIndex={0}
+          onClick={(e) => { e.preventDefault(); window.api.shell.openExternal('https://llm.starapp.net/zh/console/forgot-password') }}
+          onKeyDown={(e) => { if (e.key === 'Enter') window.api.shell.openExternal('https://llm.starapp.net/zh/console/forgot-password') }}
+          style={{ fontSize: 12, color: 'var(--accent)', cursor: 'pointer', textDecoration: 'none' }}
         >
           Forgot password?
-        </span>
+        </a>
       </div>
       <button
-        type="submit" disabled={loading || !login || !password}
+        type="submit" disabled={disabled}
         style={{
           width: '100%', padding: '10px 0', background: loading ? 'var(--accent-hover)' : 'var(--accent)',
           color: '#fff', border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 500,
-          cursor: loading ? 'wait' : 'pointer', opacity: (!login || !password) ? 0.5 : 1
+          ...(disabled ? { cursor: 'not-allowed', opacity: 0.5 } : { cursor: 'pointer' }),
         }}
       >
         {loading ? 'Signing in...' : 'Sign In'}
@@ -135,10 +151,12 @@ function RegisterForm({ onSuccess, onError, onMessage }: {
   const [password, setPassword] = useState('')
   const [username, setUsername] = useState('')
   const [referralCode, setReferralCode] = useState('')
+  const [showMore, setShowMore] = useState(false)
   const [loading, setLoading] = useState(false)
   const [codeSending, setCodeSending] = useState(false)
   const [countdown, setCountdown] = useState(0)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const disabled = loading || !email || !code || !password
 
   // Cleanup timer on unmount
   useEffect(() => {
@@ -193,19 +211,18 @@ function RegisterForm({ onSuccess, onError, onMessage }: {
     <form onSubmit={handleSubmit}>
       <div style={{ marginBottom: 16 }}>
         <label style={labelStyle}>Email</label>
-        <input
+        <FocusInput
           type="email" value={email} onChange={(e) => setEmail(e.target.value)}
           placeholder="you@example.com" autoFocus
-          style={inputStyle}
         />
       </div>
       <div style={{ marginBottom: 16 }}>
         <label style={labelStyle}>Verification Code</label>
         <div style={{ display: 'flex', gap: 8 }}>
-          <input
+          <FocusInput
             type="text" value={code} onChange={(e) => setCode(e.target.value)}
             placeholder="Enter code" maxLength={6}
-            style={{ ...inputStyle, flex: 1 }}
+            style={{ flex: 1 }}
           />
           <button
             type="button" onClick={handleSendCode}
@@ -213,7 +230,8 @@ function RegisterForm({ onSuccess, onError, onMessage }: {
             style={{
               padding: '0 16px', background: 'var(--bg-tertiary)', border: '1px solid var(--border)',
               borderRadius: 6, color: (!email || countdown > 0) ? 'var(--text-muted)' : 'var(--accent)',
-              fontSize: 13, cursor: (!email || countdown > 0) ? 'default' : 'pointer', whiteSpace: 'nowrap'
+              fontSize: 13, whiteSpace: 'nowrap',
+              cursor: (!email || countdown > 0) ? 'not-allowed' : 'pointer',
             }}
           >
             {codeSending ? '...' : countdown > 0 ? `${countdown}s` : 'Send Code'}
@@ -222,34 +240,45 @@ function RegisterForm({ onSuccess, onError, onMessage }: {
       </div>
       <div style={{ marginBottom: 16 }}>
         <label style={labelStyle}>Password</label>
-        <input
+        <FocusInput
           type="password" value={password} onChange={(e) => setPassword(e.target.value)}
           placeholder="Create a password"
-          style={inputStyle}
         />
       </div>
-      <div style={{ marginBottom: 16 }}>
-        <label style={labelStyle}>Username (optional)</label>
-        <input
-          type="text" value={username} onChange={(e) => setUsername(e.target.value)}
-          placeholder="Choose a username"
-          style={inputStyle}
-        />
-      </div>
-      <div style={{ marginBottom: 24 }}>
-        <label style={labelStyle}>Referral Code (optional)</label>
-        <input
-          type="text" value={referralCode} onChange={(e) => setReferralCode(e.target.value)}
-          placeholder="Enter referral code"
-          style={inputStyle}
-        />
-      </div>
+
+      {/* Collapsible optional fields */}
+      {!showMore ? (
+        <div
+          onClick={() => setShowMore(true)}
+          style={{ fontSize: 12, color: 'var(--accent)', cursor: 'pointer', marginBottom: 20, textAlign: 'center' }}
+        >
+          More options (username, referral code)
+        </div>
+      ) : (
+        <>
+          <div style={{ marginBottom: 16 }}>
+            <label style={labelStyle}>Username (optional)</label>
+            <FocusInput
+              type="text" value={username} onChange={(e) => setUsername(e.target.value)}
+              placeholder="Choose a username"
+            />
+          </div>
+          <div style={{ marginBottom: 24 }}>
+            <label style={labelStyle}>Referral Code (optional)</label>
+            <FocusInput
+              type="text" value={referralCode} onChange={(e) => setReferralCode(e.target.value)}
+              placeholder="Enter referral code"
+            />
+          </div>
+        </>
+      )}
+
       <button
-        type="submit" disabled={loading || !email || !code || !password}
+        type="submit" disabled={disabled}
         style={{
           width: '100%', padding: '10px 0', background: loading ? 'var(--accent-hover)' : 'var(--accent)',
           color: '#fff', border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 500,
-          cursor: loading ? 'wait' : 'pointer', opacity: (!email || !code || !password) ? 0.5 : 1
+          ...(disabled ? { cursor: 'not-allowed', opacity: 0.5 } : { cursor: 'pointer' }),
         }}
       >
         {loading ? 'Creating account...' : 'Create Account'}
