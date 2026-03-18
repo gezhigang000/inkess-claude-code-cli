@@ -1,101 +1,196 @@
 #!/bin/bash
 set -e
 
-# Inkess Claude Code CLI — local release script
-# Builds Mac DMGs (arm64 + x64), uploads to GitHub Release + OSS
+# ============================================================
+# Inkess Claude Code CLI — One-click Release Script
+# ============================================================
 #
 # Usage:
-#   ./scripts/release-app.sh           # auto-detect version from package.json
-#   ./scripts/release-app.sh v0.2.0    # specify version tag
+#   ./scripts/release-app.sh [version]
+#
+# Examples:
+#   ./scripts/release-app.sh          # bump patch: 0.2.2 → 0.2.3
+#   ./scripts/release-app.sh 0.3.0    # set specific version
+#
+# What it does (in order):
+#   1. Bump version in package.json
+#   2. Build renderer + main
+#   3. Package Mac arm64 + x64 DMGs
+#   4. Upload Mac DMGs + latest-mac.yml to OSS
+#   5. Update Homebrew Cask (sha256 + version)
+#   6. Commit, tag, push → triggers GitHub Actions for Windows
+#   7. GitHub Actions: build exe → upload to GitHub Release + OSS
+#
+# Prerequisites:
+#   - OSS credentials in scripts/.env (OSS_ACCESS_KEY_ID, OSS_ACCESS_KEY_SECRET)
+#   - gh CLI authenticated
+#   - Homebrew tap repo cloned at ~/work-inkess/homebrew-tap
+#   - Apple Developer ID certificate in keychain (for signing)
+# ============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-CODE_DIR="$SCRIPT_DIR/../code"
-cd "$CODE_DIR"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_DIR"
 
-# Version
-VERSION="${1:-v$(node -p "require('./package.json').version")}"
-echo "=== Releasing $VERSION ==="
+# Load OSS credentials
+if [ -f "$SCRIPT_DIR/.env" ]; then
+  export $(grep -v '^#' "$SCRIPT_DIR/.env" | xargs)
+fi
 
-# 1. Build + package Mac arm64 & x64
-echo ""
-echo "--- Building Mac DMGs ---"
-npm run build
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
 
-# Use npmmirror for Electron download (GitHub blocked in some regions)
-# CUSTOM_DMGBUILD_PATH avoids dmg-builder download being affected by ELECTRON_MIRROR
-export ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
+step() { echo -e "\n${GREEN}▸ $1${NC}"; }
+warn() { echo -e "${YELLOW}⚠ $1${NC}"; }
+fail() { echo -e "${RED}✗ $1${NC}"; exit 1; }
+
+# ── Step 0: Determine version ──────────────────────────────
+
+CURRENT_VERSION=$(node -p "require('./package.json').version")
+
+if [ -n "$1" ]; then
+  NEW_VERSION="$1"
+else
+  # Auto bump patch
+  IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
+  NEW_VERSION="$major.$minor.$((patch + 1))"
+fi
+
+TAG="v$NEW_VERSION"
+echo "=== Releasing $TAG (current: $CURRENT_VERSION) ==="
+
+# Check for uncommitted changes (besides version bump)
+if [ -n "$(git status --porcelain)" ]; then
+  warn "Uncommitted changes detected. They will be included in the release commit."
+fi
+
+# ── Step 1: Bump version ───────────────────────────────────
+
+step "Bumping version to $NEW_VERSION"
+sed -i '' "s/\"version\": \"$CURRENT_VERSION\"/\"version\": \"$NEW_VERSION\"/" package.json
+echo "  package.json → $NEW_VERSION"
+
+# ── Step 2: Build ──────────────────────────────────────────
+
+step "Building app"
+npx electron-vite build
+echo "  Build complete"
+
+# ── Step 3: Package Mac DMGs ───────────────────────────────
+
+step "Packaging Mac DMGs (arm64 + x64)"
+
+# Use local dmgbuild cache to avoid npmmirror 404
 DMGBUILD_DIR="$HOME/Library/Caches/electron-builder/dmg-builder@1.2.0/dmgbuild-bundle-arm64-75c8a6c"
 if [ -f "$DMGBUILD_DIR/dmgbuild" ]; then
   export CUSTOM_DMGBUILD_PATH="$DMGBUILD_DIR/dmgbuild"
 fi
 
-npx electron-builder --mac --arm64
-npx electron-builder --mac --x64
+# Clean old artifacts
+rm -rf release/mac release/mac-arm64 release/*.dmg release/*.blockmap release/*.yml 2>/dev/null || true
 
-echo ""
-echo "--- Built artifacts ---"
-ls -lh release/*.dmg 2>/dev/null
-ls -lh release/*.exe 2>/dev/null
+npx electron-builder --mac --arm64 --x64
 
-# 2. Create git tag if not exists
-if ! git rev-parse "$VERSION" >/dev/null 2>&1; then
-  echo ""
-  echo "--- Creating tag $VERSION ---"
-  git tag "$VERSION"
-  echo "Tag created. Push with: git push origin $VERSION"
-fi
+ARM64_DMG="release/Inkess Claude Code CLI-${NEW_VERSION}-arm64.dmg"
+X64_DMG="release/Inkess Claude Code CLI-${NEW_VERSION}.dmg"
 
-# 3. Upload to GitHub Release
-echo ""
-echo "--- Uploading to GitHub Release ---"
-if gh release view "$VERSION" >/dev/null 2>&1; then
-  echo "Release $VERSION exists, uploading assets..."
-  gh release upload "$VERSION" release/*.dmg --clobber
-else
-  echo "Creating release $VERSION..."
-  gh release create "$VERSION" release/*.dmg \
-    --title "$VERSION" \
-    --notes "Inkess Claude Code CLI $VERSION" \
-    --draft
-fi
+[ -f "$ARM64_DMG" ] || fail "arm64 DMG not found"
+[ -f "$X64_DMG" ] || fail "x64 DMG not found"
 
-# 4. Upload to OSS (optional, requires OSS env vars)
+echo "  $(ls -lh "$ARM64_DMG" | awk '{print $5}') arm64"
+echo "  $(ls -lh "$X64_DMG" | awk '{print $5}') x64"
+
+# ── Step 4: Upload Mac to OSS ─────────────────────────────
+
 if [ -n "$OSS_ACCESS_KEY_ID" ] && [ -n "$OSS_ACCESS_KEY_SECRET" ]; then
-  echo ""
-  echo "--- Uploading to OSS ---"
-  RELEASE_DIR="$CODE_DIR/release"
-
+  step "Uploading Mac artifacts to OSS"
   python3 -c "
 import oss2, os, glob
-
 auth = oss2.Auth(os.environ['OSS_ACCESS_KEY_ID'], os.environ['OSS_ACCESS_KEY_SECRET'])
-bucket = oss2.Bucket(auth, 'https://oss-cn-beijing.aliyuncs.com', 'inkess-install-file', connect_timeout=30)
-
-version = '$VERSION'.lstrip('v')
-files = glob.glob('$RELEASE_DIR/*.dmg') + glob.glob('$RELEASE_DIR/*.exe')
-
-for f in files:
+bucket = oss2.Bucket(auth, 'https://oss-cn-beijing.aliyuncs.com', 'inkess-install-file')
+for f in glob.glob('release/*.dmg') + glob.glob('release/*.dmg.blockmap') + glob.glob('release/latest-mac.yml'):
     name = os.path.basename(f)
-    key = f'app-releases/{version}/{name}'
+    key = f'app-releases/{name}'
     size_mb = os.path.getsize(f) / 1024 / 1024
-    print(f'  Uploading {key} ({size_mb:.1f} MB)...')
-    oss2.resumable_upload(bucket, key, f, part_size=10*1024*1024, num_threads=2)
-    print(f'  Done: {name}')
-
-# Update latest pointer
-bucket.put_object('app-releases/latest', version.encode())
-print(f'  Updated latest -> {version}')
-print('  OSS upload complete.')
+    print(f'  {name} ({size_mb:.1f} MB)...')
+    oss2.resumable_upload(bucket, key, f, part_size=10*1024*1024, num_threads=3)
+print('  OSS upload complete')
 "
 else
-  echo ""
-  echo "--- Skipping OSS upload (set OSS_ACCESS_KEY_ID + OSS_ACCESS_KEY_SECRET to enable) ---"
+  warn "Skipping OSS upload (no credentials in scripts/.env)"
 fi
 
+# ── Step 5: Update Homebrew Cask ───────────────────────────
+
+HOMEBREW_TAP="$HOME/work-inkess/homebrew-tap"
+if [ -d "$HOMEBREW_TAP" ]; then
+  step "Updating Homebrew Cask"
+  ARM64_SHA=$(shasum -a 256 "$ARM64_DMG" | awk '{print $1}')
+  X64_SHA=$(shasum -a 256 "$X64_DMG" | awk '{print $1}')
+
+  CASK_FILE="$HOMEBREW_TAP/Casks/inkess-claude-code-cli.rb"
+  cat > "$CASK_FILE" << CASK
+cask "inkess-claude-code-cli" do
+  version "$NEW_VERSION"
+
+  if Hardware::CPU.arm?
+    url "https://inkess-install-file.oss-cn-beijing.aliyuncs.com/app-releases/Inkess%20Claude%20Code%20CLI-#{version}-arm64.dmg"
+    sha256 "$ARM64_SHA"
+  else
+    url "https://inkess-install-file.oss-cn-beijing.aliyuncs.com/app-releases/Inkess%20Claude%20Code%20CLI-#{version}.dmg"
+    sha256 "$X64_SHA"
+  end
+
+  name "Inkess Claude Code CLI"
+  desc "Zero-config Claude Code desktop client for Inkess users"
+  homepage "https://llm.starapp.net"
+
+  app "Inkess Claude Code CLI.app"
+
+  zap trash: [
+    "~/Library/Application Support/inkess-claude-code",
+    "~/Library/Preferences/com.inkess.claude-code.plist",
+    "~/Library/Logs/inkess-claude-code",
+  ]
+end
+CASK
+
+  cd "$HOMEBREW_TAP"
+  git add -A
+  git commit -m "Update inkess-claude-code-cli to $NEW_VERSION" 2>/dev/null || true
+  git push origin main 2>/dev/null || warn "Failed to push homebrew-tap"
+  cd "$PROJECT_DIR"
+  echo "  Cask updated → $NEW_VERSION"
+else
+  warn "Homebrew tap not found at $HOMEBREW_TAP, skipping"
+fi
+
+# ── Step 6: Commit, tag, push ──────────────────────────────
+
+step "Committing and pushing"
+git add -A
+git commit -m "release: v$NEW_VERSION" || true
+git tag "$TAG"
+git push github main
+git push github "$TAG"
+echo "  Pushed $TAG → GitHub Actions will build Windows exe"
+
+# ── Done ───────────────────────────────────────────────────
+
 echo ""
-echo "=== Release $VERSION done ==="
+echo -e "${GREEN}=== Release $TAG complete ===${NC}"
 echo ""
-echo "Next steps:"
-echo "  1. git push origin main && git push origin $VERSION"
-echo "  2. GitHub Actions will build Windows .exe and attach to the release"
-echo "  3. Go to GitHub releases and publish the draft (if created as draft)"
+echo "  Mac arm64 DMG : OSS ✓"
+echo "  Mac x64 DMG   : OSS ✓"
+echo "  Homebrew Cask : updated ✓"
+echo "  Windows exe   : GitHub Actions building..."
+echo ""
+echo "  GitHub Actions will automatically:"
+echo "    1. Build Windows exe"
+echo "    2. Upload to GitHub Release"
+echo "    3. Upload to OSS"
+echo ""
+echo "  Monitor: gh run list --limit 1"

@@ -85,7 +85,7 @@
     },
     "publish": {
       "provider": "generic",
-      "url": "https://cli-mirror.inkess.com/app-releases"
+      "url": "https://inkess-install-file.oss-cn-beijing.aliyuncs.com/app-releases"
     }
   },
   "devDependencies": {
