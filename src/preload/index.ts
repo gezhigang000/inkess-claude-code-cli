@@ -76,6 +76,11 @@ const api = {
       const listener = (_: unknown, event: { id: string; exitCode: number }) => callback(event)
       ipcRenderer.on('pty:exit', listener)
       return () => ipcRenderer.removeListener('pty:exit', listener)
+    },
+    onActivity: (callback: (event: { id: string; type: string; payload?: string }) => void) => {
+      const listener = (_: unknown, event: { id: string; type: string; payload?: string }) => callback(event)
+      ipcRenderer.on('pty:activity', listener)
+      return () => { ipcRenderer.removeListener('pty:activity', listener) }
     }
   },
 
@@ -137,7 +142,31 @@ const api = {
   },
 
   app: {
-    getVersion: () => ipcRenderer.invoke('app:getVersion') as Promise<string>
+    getVersion: () => ipcRenderer.invoke('app:getVersion') as Promise<string>,
+    isFocused: () => ipcRenderer.invoke('app:isFocused') as Promise<boolean>
+  },
+
+  git: {
+    getBranch: (cwd: string) => ipcRenderer.invoke('git:getBranch', cwd) as Promise<string | null>
+  },
+
+  notification: {
+    show: (title: string, body: string) => ipcRenderer.invoke('notification:show', { title, body }),
+    onShouldShow: (callback: (event: { id: string; type: string }) => void) => {
+      const listener = (_: unknown, event: { id: string; type: string }) => callback(event)
+      ipcRenderer.on('notification:shouldShow', listener)
+      return () => { ipcRenderer.removeListener('notification:shouldShow', listener) }
+    }
+  },
+
+  power: {
+    onSleepInhibitChange: (callback: (active: boolean) => void) => {
+      const listener = (_: unknown, active: boolean) => callback(active)
+      ipcRenderer.on('power:sleepInhibitChange', listener)
+      return () => { ipcRenderer.removeListener('power:sleepInhibitChange', listener) }
+    },
+    setSleepInhibitorEnabled: (enabled: boolean) =>
+      ipcRenderer.send('power:setSleepInhibitorEnabled', enabled)
   }
 }
 

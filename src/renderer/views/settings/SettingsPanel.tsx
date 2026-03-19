@@ -77,7 +77,10 @@ export function SettingsPanel({ onClose, onLogout }: SettingsPanelProps) {
             <AccountSection user={user} balance={balance} onLogout={onLogout} />
           )}
           {activeSection === 'appearance' && (
-            <AppearanceSection fontSize={fontSize} onFontSizeChange={setFontSize} theme={theme} onThemeChange={setTheme} />
+            <AppearanceSection
+              fontSize={fontSize} onFontSizeChange={setFontSize}
+              theme={theme} onThemeChange={setTheme}
+            />
           )}
           {activeSection === 'language' && (
             <LanguageSection language={language} onChange={setLanguage} />
@@ -209,6 +212,10 @@ function AppearanceSection({ fontSize, onFontSizeChange, theme, onThemeChange }:
   theme: 'auto' | 'dark' | 'light'; onThemeChange: (v: 'auto' | 'dark' | 'light') => void
 }) {
   const { t } = useI18n()
+  const {
+    notificationsEnabled, setNotificationsEnabled,
+    sleepInhibitorEnabled, setSleepInhibitorEnabled
+  } = useSettingsStore()
   const themeOptions: { id: 'auto' | 'dark' | 'light'; label: string }[] = [
     { id: 'auto', label: t('settings.themeAuto') },
     { id: 'dark', label: t('settings.themeDark') },
@@ -245,6 +252,20 @@ function AppearanceSection({ fontSize, onFontSizeChange, theme, onThemeChange }:
           />
           <span style={{ fontSize: 13, color: 'var(--text-primary)', minWidth: 30 }}>{fontSize}px</span>
         </div>
+      </SettingsGroup>
+      <SettingsGroup title={t('settings.notifications')}>
+        <ToggleRow
+          label={t('settings.notificationsEnabled')}
+          checked={notificationsEnabled}
+          onChange={setNotificationsEnabled}
+        />
+      </SettingsGroup>
+      <SettingsGroup title={t('settings.sleepInhibitor')}>
+        <ToggleRow
+          label={t('settings.sleepInhibitorEnabled')}
+          checked={sleepInhibitorEnabled}
+          onChange={setSleepInhibitorEnabled}
+        />
       </SettingsGroup>
     </div>
   )
@@ -330,5 +351,29 @@ function FocusInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
       onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; props.onFocus?.(e) }}
       onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; props.onBlur?.(e) }}
     />
+  )
+}
+
+/** Toggle switch (pill style, 40x22) */
+function ToggleRow({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0' }}>
+      <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>{label}</span>
+      <div
+        onClick={() => onChange(!checked)}
+        style={{
+          width: 40, height: 22, borderRadius: 11, cursor: 'pointer',
+          background: checked ? 'var(--accent)' : 'var(--bg-active)',
+          position: 'relative', transition: 'background 0.2s',
+        }}
+      >
+        <div style={{
+          width: 18, height: 18, borderRadius: '50%', background: '#fff',
+          position: 'absolute', top: 2,
+          left: checked ? 20 : 2,
+          transition: 'left 0.2s',
+        }} />
+      </div>
+    </div>
   )
 }

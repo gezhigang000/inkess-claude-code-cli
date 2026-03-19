@@ -1,6 +1,6 @@
 {
   "name": "inkess-claude-code-cli",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "Inkess Claude Code CLI — Zero-config Claude Code terminal for Inkess users",
   "author": "Inkess",
   "main": "./out/main/index.js",
@@ -89,7 +89,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.2.0",
     "autoprefixer": "^10.4.27",
-    "electron": "^41.0.2",
+    "electron": "^41.0.3",
     "electron-builder": "^26.0.12",
     "electron-rebuild": "^3.2.9",
     "electron-vite": "^5.0.0",

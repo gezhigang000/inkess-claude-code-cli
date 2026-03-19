@@ -1,7 +1,8 @@
 import log from './logger'
-import { app, BrowserWindow, ipcMain, shell, dialog, Menu, session, nativeImage, clipboard } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, dialog, Menu, session, nativeImage, clipboard, Notification, powerSaveBlocker } from 'electron'
 import { join } from 'path'
 import { PtyManager } from './pty/pty-manager'
+import { PtyOutputMonitor, type PtyActivityEvent } from './pty/pty-output-monitor'
 import { CliManager } from './cli/cli-manager'
 import { AuthManager } from './auth/auth-manager'
 import { checkForAppUpdate, downloadAppUpdate, installAppUpdate, onUpdateStatus } from './updater'
@@ -12,6 +13,7 @@ process.on('unhandledRejection', (reason) => log.error('Unhandled:', reason))
 
 let mainWindow: BrowserWindow | null = null
 const ptyManager = new PtyManager()
+const ptyMonitor = new PtyOutputMonitor()
 const cliManager = new CliManager()
 const authManager = new AuthManager()
 const analytics = new Analytics()
@@ -73,6 +75,10 @@ function createWindow(): void {
   mainWindow.on('closed', () => {
     mainWindow = null
   })
+
+  // Track window focus for notifications
+  mainWindow.on('focus', () => { isWindowFocused = true })
+  mainWindow.on('blur', () => { isWindowFocused = false })
 }
 
 // IPC: Auth Manager
@@ -170,11 +176,14 @@ ipcMain.handle('pty:create', (_event, options: {
     }
 
     const id = ptyManager.create(options.cwd, options.env, command, args)
+    ptyMonitor.watch(id)
     ptyManager.onData(id, (data) => {
       mainWindow?.webContents.send('pty:data', { id, data })
+      ptyMonitor.feed(id, data)
     })
     ptyManager.onExit(id, (exitCode) => {
       mainWindow?.webContents.send('pty:exit', { id, exitCode })
+      ptyMonitor.unwatch(id)
     })
     analytics.track('tab_create')
     return { id }
@@ -247,6 +256,69 @@ ipcMain.on('analytics:track', (_event, { event, props }: { event: string; props?
   analytics.track(event, props)
 })
 
+// --- Window focus tracking ---
+let isWindowFocused = true
+
+// --- Sleep inhibitor ---
+let sleepBlockerId: number | null = null
+let sleepInhibitorEnabled = true
+
+// --- PTY Monitor: broadcast activity events + notifications + sleep ---
+ptyMonitor.on('activity', (event: PtyActivityEvent) => {
+  mainWindow?.webContents.send('pty:activity', event)
+
+  // Desktop notification on task-complete when window is unfocused
+  if (event.type === 'task-complete' && !isWindowFocused) {
+    mainWindow?.webContents.send('notification:shouldShow', event)
+  }
+
+  // Sleep inhibitor: start when streaming, stop when all idle
+  if (event.type === 'streaming') {
+    if (sleepBlockerId === null && sleepInhibitorEnabled) {
+      sleepBlockerId = powerSaveBlocker.start('prevent-app-suspension')
+      mainWindow?.webContents.send('power:sleepInhibitChange', true)
+    }
+  } else if (event.type === 'task-complete' || event.type === 'prompt-idle') {
+    if (sleepBlockerId !== null && !ptyMonitor.isAnyStreaming()) {
+      powerSaveBlocker.stop(sleepBlockerId)
+      sleepBlockerId = null
+      mainWindow?.webContents.send('power:sleepInhibitChange', false)
+    }
+  }
+})
+
+// IPC: Show notification (renderer → main, respects user settings)
+ipcMain.handle('notification:show', (_event, { title, body }: { title: string; body: string }) => {
+  if (Notification.isSupported()) {
+    new Notification({ title, body, silent: false }).show()
+  }
+})
+
+// IPC: Window focus state
+ipcMain.handle('app:isFocused', () => isWindowFocused)
+
+// IPC: Sleep inhibitor setting
+ipcMain.on('power:setSleepInhibitorEnabled', (_event, enabled: boolean) => {
+  sleepInhibitorEnabled = enabled
+  // If disabling and currently blocking, stop immediately
+  if (!enabled && sleepBlockerId !== null) {
+    powerSaveBlocker.stop(sleepBlockerId)
+    sleepBlockerId = null
+    mainWindow?.webContents.send('power:sleepInhibitChange', false)
+  }
+})
+
+// IPC: Git branch
+ipcMain.handle('git:getBranch', async (_event, cwd: string) => {
+  try {
+    const { execSync } = require('child_process')
+    const branch = execSync('git rev-parse --abbrev-ref HEAD', { cwd, encoding: 'utf-8', timeout: 3000 }).trim()
+    return branch || null
+  } catch {
+    return null
+  }
+})
+
 // App lifecycle
 app.whenReady().then(() => {
   // CSP: production only (dev needs localhost + ws for HMR)
@@ -291,6 +363,11 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   analytics.flushSync()
   ptyManager.killAll()
+  ptyMonitor.dispose()
+  if (sleepBlockerId !== null) {
+    powerSaveBlocker.stop(sleepBlockerId)
+    sleepBlockerId = null
+  }
   if (process.platform !== 'darwin') {
     app.quit()
   }

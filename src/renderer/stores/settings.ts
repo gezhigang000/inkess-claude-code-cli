@@ -10,11 +10,17 @@ interface SettingsState {
   ideChoice: string
   language: LanguageChoice
   theme: ThemeChoice
+  notificationsEnabled: boolean
+  notificationSound: boolean
+  sleepInhibitorEnabled: boolean
 
   setFontSize: (v: number) => void
   setIdeChoice: (v: string) => void
   setLanguage: (v: LanguageChoice) => void
   setTheme: (v: ThemeChoice) => void
+  setNotificationsEnabled: (v: boolean) => void
+  setNotificationSound: (v: boolean) => void
+  setSleepInhibitorEnabled: (v: boolean) => void
 }
 
 function loadSettings(): Partial<SettingsState> {
@@ -25,13 +31,16 @@ function loadSettings(): Partial<SettingsState> {
   return {}
 }
 
-function saveSettings(state: Pick<SettingsState, 'fontSize' | 'ideChoice' | 'language' | 'theme'>) {
+function saveSettings(state: Pick<SettingsState, 'fontSize' | 'ideChoice' | 'language' | 'theme' | 'notificationsEnabled' | 'notificationSound' | 'sleepInhibitorEnabled'>) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       fontSize: state.fontSize,
       ideChoice: state.ideChoice,
       language: state.language,
       theme: state.theme,
+      notificationsEnabled: state.notificationsEnabled,
+      notificationSound: state.notificationSound,
+      sleepInhibitorEnabled: state.sleepInhibitorEnabled,
     }))
   } catch { /* ignore */ }
 }
@@ -54,11 +63,21 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   ideChoice: saved.ideChoice ?? 'vscode',
   language: (saved as any).language ?? 'auto',
   theme: (saved as any).theme ?? 'auto',
+  notificationsEnabled: (saved as any).notificationsEnabled ?? true,
+  notificationSound: (saved as any).notificationSound ?? true,
+  sleepInhibitorEnabled: (saved as any).sleepInhibitorEnabled ?? true,
 
   setFontSize: (v) => { set({ fontSize: v }); saveSettings({ ...get(), fontSize: v }) },
   setIdeChoice: (v) => { set({ ideChoice: v }); saveSettings({ ...get(), ideChoice: v }) },
   setLanguage: (v) => { set({ language: v }); saveSettings({ ...get(), language: v }) },
   setTheme: (v) => { set({ theme: v }); applyTheme(v); saveSettings({ ...get(), theme: v }) },
+  setNotificationsEnabled: (v) => { set({ notificationsEnabled: v }); saveSettings({ ...get(), notificationsEnabled: v }) },
+  setNotificationSound: (v) => { set({ notificationSound: v }); saveSettings({ ...get(), notificationSound: v }) },
+  setSleepInhibitorEnabled: (v) => {
+    set({ sleepInhibitorEnabled: v })
+    saveSettings({ ...get(), sleepInhibitorEnabled: v })
+    window.api?.power?.setSleepInhibitorEnabled(v)
+  },
 }))
 
 // Apply theme on load

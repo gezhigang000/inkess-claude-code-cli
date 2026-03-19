@@ -91,6 +91,32 @@ export const en = {
   'sidebar.noProjects': 'No projects yet',
   'sidebar.settings': 'Settings',
   'sidebar.cliStatus': 'Claude Code CLI',
+  'sidebar.sessions': 'Sessions',
+  'sidebar.active': 'Active',
+  'sidebar.recent': 'Recent',
+  'sidebar.yesterday': 'yesterday',
+
+  // StatusBar
+  'statusbar.preventingSleep': 'Preventing sleep',
+
+  // Close Tab
+  'tab.pressAgainToClose': 'Press again to close',
+
+  // Settings (new)
+  'settings.notifications': 'Notifications',
+  'settings.notificationsEnabled': 'Desktop notifications',
+  'settings.sleepInhibitor': 'Sleep Prevention',
+  'settings.sleepInhibitorEnabled': 'Prevent sleep during tasks',
+
+  // Command Palette
+  'cmdPalette.placeholder': 'Type a command...',
+  'cmdPalette.noResults': 'No matching commands',
+  'cmdPalette.newTab': 'New Tab',
+  'cmdPalette.settings': 'Settings',
+  'cmdPalette.toggleTheme': 'Toggle Theme',
+  'cmdPalette.modeSuggest': 'Mode: Suggest',
+  'cmdPalette.modeAutoEdit': 'Mode: Auto Edit',
+  'cmdPalette.modeFullAuto': 'Mode: Full Auto',
 
   // Update
   'update.available': 'Update Available',

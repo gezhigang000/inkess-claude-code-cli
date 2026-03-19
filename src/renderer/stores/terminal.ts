@@ -5,6 +5,11 @@ export interface TerminalTab {
   ptyId: string | null
   title: string
   cwd: string
+  gitBranch?: string
+  model?: string
+  isRunning?: boolean
+  isExited?: boolean
+  mode?: 'suggest' | 'autoedit' | 'fullauto'
 }
 
 interface TerminalState {
@@ -14,9 +19,11 @@ interface TerminalState {
   removeTab: (id: string) => void
   setActiveTab: (id: string) => void
   updateTab: (id: string, updates: Partial<TerminalTab>) => void
+  /** Find tab by ptyId */
+  getTabByPtyId: (ptyId: string) => TerminalTab | undefined
 }
 
-export const useTerminalStore = create<TerminalState>((set) => ({
+export const useTerminalStore = create<TerminalState>((set, get) => ({
   tabs: [],
   activeTabId: null,
 
@@ -41,5 +48,7 @@ export const useTerminalStore = create<TerminalState>((set) => ({
   updateTab: (id, updates) =>
     set((state) => ({
       tabs: state.tabs.map((t) => (t.id === id ? { ...t, ...updates } : t))
-    }))
+    })),
+
+  getTabByPtyId: (ptyId) => get().tabs.find((t) => t.ptyId === ptyId)
 }))

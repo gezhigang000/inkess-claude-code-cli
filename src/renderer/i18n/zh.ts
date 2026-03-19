@@ -93,6 +93,32 @@ export const zh: Record<TranslationKey, string> = {
   'sidebar.noProjects': '暂无项目',
   'sidebar.settings': '设置',
   'sidebar.cliStatus': 'Claude Code CLI',
+  'sidebar.sessions': '会话',
+  'sidebar.active': '活跃',
+  'sidebar.recent': '最近',
+  'sidebar.yesterday': '昨天',
+
+  // StatusBar
+  'statusbar.preventingSleep': '阻止休眠中',
+
+  // Close Tab
+  'tab.pressAgainToClose': '再次点击关闭',
+
+  // Settings (new)
+  'settings.notifications': '通知',
+  'settings.notificationsEnabled': '桌面通知',
+  'settings.sleepInhibitor': '防休眠',
+  'settings.sleepInhibitorEnabled': '任务执行时阻止系统休眠',
+
+  // Command Palette
+  'cmdPalette.placeholder': '输入命令...',
+  'cmdPalette.noResults': '没有匹配的命令',
+  'cmdPalette.newTab': '新建标签页',
+  'cmdPalette.settings': '设置',
+  'cmdPalette.toggleTheme': '切换主题',
+  'cmdPalette.modeSuggest': '模式: 建议',
+  'cmdPalette.modeAutoEdit': '模式: 自动编辑',
+  'cmdPalette.modeFullAuto': '模式: 完全自动',
 
   // Update
   'update.available': '有可用更新',

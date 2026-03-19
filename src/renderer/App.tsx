@@ -9,6 +9,8 @@ import { SetupScreen, startInstall } from './views/setup/SetupScreen'
 import { LoginScreen } from './views/login/LoginScreen'
 import { SettingsPanel } from './views/settings/SettingsPanel'
 import { UpdateToast } from './views/update/UpdateToast'
+import { StatusBar } from './views/statusbar/StatusBar'
+import { CommandPalette } from './views/command-palette/CommandPalette'
 import { useI18n } from './i18n'
 
 const DEFAULT_CWD = window.api?.homedir || '/'
@@ -40,6 +42,9 @@ export function App() {
   const { setAuth } = useAuthStore()
   const initRef = useRef(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [pendingCloseTabId, setPendingCloseTabId] = useState<string | null>(null)
+  const [showCommandPalette, setShowCommandPalette] = useState(false)
+  const pendingCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [updateInfo, setUpdateInfo] = useState<{ current: string; latest: string } | null>(null)
   const [appUpdateStatus, setAppUpdateStatus] = useState<{
     type: string; version?: string; percent?: number
@@ -122,16 +127,37 @@ export function App() {
   const handleCloseTab = useCallback(
     (tabId: string) => {
       const tab = tabs.find((t) => t.id === tabId)
-      if (tab?.ptyId) window.api.pty.kill(tab.ptyId)
-      removeTab(tabId)
+      // If PTY already exited or only one tab, close immediately
+      if (tab?.isExited || tabs.length <= 1) {
+        if (tab?.ptyId) window.api.pty.kill(tab.ptyId)
+        removeTab(tabId)
+        setPendingCloseTabId(null)
+        return
+      }
+      // "Press again to close" pattern
+      if (pendingCloseTabId === tabId) {
+        if (tab?.ptyId) window.api.pty.kill(tab.ptyId)
+        removeTab(tabId)
+        setPendingCloseTabId(null)
+        if (pendingCloseTimerRef.current) clearTimeout(pendingCloseTimerRef.current)
+        return
+      }
+      setPendingCloseTabId(tabId)
+      if (pendingCloseTimerRef.current) clearTimeout(pendingCloseTimerRef.current)
+      pendingCloseTimerRef.current = setTimeout(() => setPendingCloseTabId(null), 3000)
     },
-    [tabs, removeTab]
+    [tabs, removeTab, pendingCloseTabId]
   )
 
   const handleSelectDirectory = useCallback(async () => {
     const dir = await window.api.shell.selectDirectory()
     if (dir) handleNewTab(dir)
   }, [handleNewTab])
+
+  // Clean up pending close timer on unmount
+  useEffect(() => {
+    return () => { if (pendingCloseTimerRef.current) clearTimeout(pendingCloseTimerRef.current) }
+  }, [])
 
   // Menu keyboard shortcuts
   useEffect(() => {
@@ -147,6 +173,16 @@ export function App() {
     ]
     return () => unsubs.forEach(fn => fn())
   }, [handleSelectDirectory, handleCloseTab, activeTabId, tabs, setActiveTab])
+
+  // Mark tabs as exited when PTY exits
+  useEffect(() => {
+    const unsub = window.api.pty.onExit((event) => {
+      const { updateTab } = useTerminalStore.getState()
+      const tab = useTerminalStore.getState().tabs.find(t => t.ptyId === event.id)
+      if (tab) updateTab(tab.id, { isExited: true })
+    })
+    return () => { unsub() }
+  }, [])
 
   // Check CLI update once on startup
   useEffect(() => {
@@ -170,6 +206,45 @@ export function App() {
       }
     })
     return () => { unsub() }
+  }, [])
+
+  // Desktop notifications: show when task completes and window is unfocused
+  useEffect(() => {
+    const unsub = window.api.notification.onShouldShow(() => {
+      const settings = useSettingsStore.getState()
+      if (!settings.notificationsEnabled) return
+      window.api.notification.show('Task Complete', 'Claude Code has finished the task.')
+    })
+    return () => { unsub() }
+  }, [])
+
+  // Global keyboard shortcuts: Cmd+K (command palette), Shift+Tab (mode cycle)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Cmd+K / Ctrl+K → toggle command palette
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        setShowCommandPalette(prev => !prev)
+      }
+      // Shift+Tab → cycle mode (only when not typing in terminal)
+      if (e.shiftKey && e.key === 'Tab' && !e.metaKey && !e.ctrlKey) {
+        const active = document.activeElement
+        // Don't intercept if focus is inside xterm or an input
+        if (active?.closest('.xterm') || active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA') return
+        e.preventDefault()
+        const store = useTerminalStore.getState()
+        const tab = store.tabs.find(t => t.id === store.activeTabId)
+        if (!tab?.ptyId || tab.isRunning) return
+        const modes = ['suggest', 'autoedit', 'fullauto'] as const
+        const cmds: Record<string, string> = { suggest: '/permissions suggest\n', autoedit: '/permissions auto-edit\n', fullauto: '/permissions full-auto\n' }
+        const idx = modes.indexOf((tab.mode || 'suggest') as any)
+        const next = modes[(idx + 1) % modes.length]
+        window.api.pty.write(tab.ptyId, cmds[next])
+        store.updateTab(tab.id, { mode: next })
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
   }, [])
 
   // Listen for system theme changes (for 'auto' mode)
@@ -242,6 +317,7 @@ export function App() {
       <TitleTabBar
         tabs={tabs}
         activeTabId={activeTabId}
+        pendingCloseTabId={pendingCloseTabId}
         onSelect={setActiveTab}
         onClose={handleCloseTab}
         onNew={handleSelectDirectory}
@@ -274,6 +350,17 @@ export function App() {
         </div>
       </div>
       {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} onLogout={handleLogout} />}
+      {showCommandPalette && (
+        <CommandPalette
+          onClose={() => setShowCommandPalette(false)}
+          onNewTab={handleSelectDirectory}
+          onSettings={() => { setShowCommandPalette(false); setShowSettings(true) }}
+          onToggleTheme={() => {
+            const { theme, setTheme } = useSettingsStore.getState()
+            setTheme(theme === 'dark' ? 'light' : theme === 'light' ? 'auto' : 'dark')
+          }}
+        />
+      )}
       {updateInfo && (
         <div style={{ position: 'fixed', bottom: 16, right: 16, zIndex: 200 }}>
           <UpdateToast
@@ -331,12 +418,13 @@ export function getRecentProjects(): string[] {
 
 import type { TerminalTab } from './stores/terminal'
 
-function TitleTabBar({ tabs, activeTabId, onSelect, onClose, onNew }: {
-  tabs: TerminalTab[]; activeTabId: string | null
+function TitleTabBar({ tabs, activeTabId, onSelect, onClose, onNew, pendingCloseTabId }: {
+  tabs: TerminalTab[]; activeTabId: string | null; pendingCloseTabId: string | null
   onSelect: (id: string) => void; onClose: (id: string) => void; onNew: () => void
 }) {
   const [hoveredTab, setHoveredTab] = useState<string | null>(null)
   const [contextMenu, setContextMenu] = useState<{ tabId: string; x: number; y: number } | null>(null)
+  const { t } = useI18n()
 
   return (
     <div
@@ -351,6 +439,7 @@ function TitleTabBar({ tabs, activeTabId, onSelect, onClose, onNew }: {
       {tabs.map((tab) => {
         const isActive = tab.id === activeTabId
         const isHovered = tab.id === hoveredTab
+        const isPendingClose = tab.id === pendingCloseTabId
         return (
           <div
             key={tab.id}
@@ -375,18 +464,31 @@ function TitleTabBar({ tabs, activeTabId, onSelect, onClose, onNew }: {
             </svg>
             {tab.title}
             {tabs.length > 1 && (
-              <span
-                onClick={(e) => { e.stopPropagation(); onClose(tab.id) }}
-                style={{
-                  width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  borderRadius: 4, fontSize: 14, marginLeft: 2,
-                  opacity: (isHovered || isActive) ? 0.7 : 0,
-                  background: isHovered ? 'var(--bg-hover)' : 'transparent',
-                  transition: 'opacity 0.15s, background 0.15s',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = 'var(--bg-active)' }}
-                onMouseLeave={(e) => { e.currentTarget.style.opacity = (isHovered || isActive) ? '0.7' : '0'; e.currentTarget.style.background = 'transparent' }}
-              >×</span>
+              <span style={{ position: 'relative', display: 'inline-flex' }}>
+                <span
+                  onClick={(e) => { e.stopPropagation(); onClose(tab.id) }}
+                  style={{
+                    width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    borderRadius: 4, fontSize: 14, marginLeft: 2,
+                    opacity: (isHovered || isActive || isPendingClose) ? 0.7 : 0,
+                    background: isPendingClose ? 'var(--error)' : (isHovered ? 'var(--bg-hover)' : 'transparent'),
+                    color: isPendingClose ? '#fff' : 'inherit',
+                    transition: 'opacity 0.15s, background 0.15s, color 0.15s',
+                  }}
+                  onMouseEnter={(e) => { if (!isPendingClose) { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = 'var(--bg-active)' } }}
+                  onMouseLeave={(e) => { if (!isPendingClose) { e.currentTarget.style.opacity = (isHovered || isActive) ? '0.7' : '0'; e.currentTarget.style.background = 'transparent' } }}
+                >×</span>
+                {isPendingClose && (
+                  <span style={{
+                    position: 'absolute', top: -28, left: '50%', transform: 'translateX(-50%)',
+                    background: 'var(--bg-active)', color: 'var(--text-primary)',
+                    padding: '2px 8px', borderRadius: 4, fontSize: 11, whiteSpace: 'nowrap',
+                    animation: 'slideUp 0.15s ease-out',
+                  }}>
+                    {t('tab.pressAgainToClose')}
+                  </span>
+                )}
+              </span>
             )}
           </div>
         )
@@ -482,27 +584,6 @@ function TabContextMenu({ tab, x, y, onClose, onDismiss }: {
           </div>
         </div>
       ))}
-    </div>
-  )
-}
-
-function StatusBar() {
-  const { balance } = useAuthStore()
-  const { t } = useI18n()
-  return (
-    <div style={{
-      height: 24, background: 'var(--bg-secondary)', display: 'flex',
-      alignItems: 'center', padding: '0 12px', borderTop: '1px solid var(--border)',
-      fontSize: 12, color: 'var(--text-muted)', flexShrink: 0, gap: 16
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)' }} />
-        {t('app.connected')}
-      </div>
-      <div>Claude Code {useAppStore.getState().cliVersion || ''}</div>
-      <div style={{ marginLeft: 'auto' }}>
-        {t('app.balance')}: ¥{(balance / 100).toFixed(2)}
-      </div>
     </div>
   )
 }
