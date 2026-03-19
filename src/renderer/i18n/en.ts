@@ -52,6 +52,13 @@ export const en = {
   'setup.verifyingInstall': 'Verifying installation...',
   'setup.installComplete': 'Installation complete',
   'setup.retry': 'Retry',
+  'setup.checkingTools': 'Checking development tools...',
+  'setup.installingTools': 'Installing development tools',
+  'setup.downloadingTools': 'Downloading development tools...',
+  'setup.toolsDownloadComplete': 'Development tools downloaded',
+  'setup.verifyingTools': 'Verifying development tools...',
+  'setup.toolsReady': 'Development tools ready',
+  'setup.toolsSkipped': 'Development tools (optional, skipped)',
 
   // Settings
   'settings.title': 'Settings',

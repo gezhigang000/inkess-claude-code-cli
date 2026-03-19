@@ -4,6 +4,7 @@ import { join } from 'path'
 import { PtyManager } from './pty/pty-manager'
 import { PtyOutputMonitor, type PtyActivityEvent } from './pty/pty-output-monitor'
 import { CliManager } from './cli/cli-manager'
+import { ToolsManager } from './tools/tools-manager'
 import { AuthManager } from './auth/auth-manager'
 import { checkForAppUpdate, downloadAppUpdate, installAppUpdate, onUpdateStatus } from './updater'
 import { Analytics } from './analytics'
@@ -15,6 +16,7 @@ let mainWindow: BrowserWindow | null = null
 const ptyManager = new PtyManager()
 const ptyMonitor = new PtyOutputMonitor()
 const cliManager = new CliManager()
+const toolsManager = new ToolsManager()
 const authManager = new AuthManager()
 const analytics = new Analytics()
 analytics.setTokenGetter(() => {
@@ -161,6 +163,32 @@ ipcMain.handle('cli:update', async () => {
   }
 })
 
+// IPC: Tools Manager
+ipcMain.handle('tools:getInfo', () => {
+  return toolsManager.getInfo()
+})
+
+ipcMain.handle('tools:isAllInstalled', () => {
+  return toolsManager.isAllInstalled()
+})
+
+ipcMain.handle('tools:install', async () => {
+  try {
+    await toolsManager.install((step, progress) => {
+      mainWindow?.webContents.send('tools:installProgress', { step, progress })
+    })
+    analytics.track('tools_install')
+    return { success: true }
+  } catch (err) {
+    log.error('Tools install failed:', err)
+    return { success: false, error: (err as Error).message }
+  }
+})
+
+ipcMain.handle('tools:getEnvPatch', () => {
+  return toolsManager.getEnvPatch()
+})
+
 // IPC: PTY — now supports launching claude directly
 ipcMain.handle('pty:create', (_event, options: {
   cwd: string
@@ -175,7 +203,11 @@ ipcMain.handle('pty:create', (_event, options: {
       command = cliManager.getBinaryPath()
     }
 
-    const id = ptyManager.create(options.cwd, options.env, command, args)
+    // Merge tools PATH into env so PTY can find bundled python/git
+    const toolsEnv = toolsManager.getEnvPatch()
+    const mergedEnv = { ...toolsEnv, ...options.env }
+
+    const id = ptyManager.create(options.cwd, mergedEnv, command, args)
     ptyMonitor.watch(id)
     ptyManager.onData(id, (data) => {
       mainWindow?.webContents.send('pty:data', { id, data })

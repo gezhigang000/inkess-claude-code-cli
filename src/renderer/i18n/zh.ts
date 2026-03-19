@@ -54,6 +54,13 @@ export const zh: Record<TranslationKey, string> = {
   'setup.verifyingInstall': '正在验证安装...',
   'setup.installComplete': '安装完成',
   'setup.retry': '重试',
+  'setup.checkingTools': '检查开发工具中...',
+  'setup.installingTools': '正在安装开发工具',
+  'setup.downloadingTools': '下载开发工具...',
+  'setup.toolsDownloadComplete': '开发工具下载完成',
+  'setup.verifyingTools': '正在验证开发工具...',
+  'setup.toolsReady': '开发工具就绪',
+  'setup.toolsSkipped': '开发工具（可选，已跳过）',
 
   // Settings
   'settings.title': '设置',

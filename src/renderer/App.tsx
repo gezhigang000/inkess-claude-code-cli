@@ -5,7 +5,7 @@ import { useAuthStore } from './stores/auth'
 import { useSettingsStore, applyTheme } from './stores/settings'
 import { TerminalView } from './views/terminal/TerminalView'
 import { Sidebar } from './views/sidebar/Sidebar'
-import { SetupScreen, startInstall } from './views/setup/SetupScreen'
+import { SetupScreen, startInstall, startToolsInstall } from './views/setup/SetupScreen'
 import { LoginScreen } from './views/login/LoginScreen'
 import { SettingsPanel } from './views/settings/SettingsPanel'
 import { UpdateToast } from './views/update/UpdateToast'
@@ -74,9 +74,16 @@ export function App() {
     setCliInfo(info.installed, info.version)
 
     if (!info.installed) {
+      // startInstall handles both CLI + tools
       await startInstall()
       const newInfo = await window.api.cli.getInfo()
       if (!newInfo.installed) return
+    } else {
+      // CLI already installed — check tools separately
+      const toolsInstalled = await window.api.tools.isAllInstalled()
+      if (!toolsInstalled) {
+        await startToolsInstall()
+      }
     }
 
     setPhase('ready')

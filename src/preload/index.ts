@@ -58,6 +58,20 @@ const api = {
     }
   },
 
+  tools: {
+    getInfo: () => ipcRenderer.invoke('tools:getInfo'),
+    isAllInstalled: () => ipcRenderer.invoke('tools:isAllInstalled') as Promise<boolean>,
+    install: () => ipcRenderer.invoke('tools:install') as Promise<{
+      success: boolean; error?: string
+    }>,
+    getEnvPatch: () => ipcRenderer.invoke('tools:getEnvPatch') as Promise<Record<string, string>>,
+    onInstallProgress: (callback: (event: { step: string; progress: number }) => void) => {
+      const listener = (_: unknown, event: { step: string; progress: number }) => callback(event)
+      ipcRenderer.on('tools:installProgress', listener)
+      return () => ipcRenderer.removeListener('tools:installProgress', listener)
+    }
+  },
+
   pty: {
     create: (options: { cwd: string; env?: Record<string, string>; launchClaude?: boolean }) =>
       ipcRenderer.invoke('pty:create', options),

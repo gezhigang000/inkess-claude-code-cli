@@ -198,7 +198,7 @@ export function SetupScreen() {
   )
 }
 
-/** Start the CLI install flow. Call from App after detecting CLI is not installed. */
+/** Start the CLI + tools install flow. Call from App after detecting CLI is not installed. */
 export async function startInstall(): Promise<boolean> {
   const { setInstallSteps, setPhase, setCliInfo, setInstallError, setInstallProgress } = useAppStore.getState()
   const t = getT()
@@ -208,40 +208,140 @@ export async function startInstall(): Promise<boolean> {
   setInstallSteps([
     { label: t('setup.checkEnv'), status: 'done' },
     { label: t('setup.downloading'), status: 'active' },
-    { label: t('setup.verifyInstall'), status: 'pending' }
+    { label: t('setup.verifyInstall'), status: 'pending' },
+    { label: t('setup.downloadingTools'), status: 'pending' }
   ])
 
-  // Listen for progress
-  const removeListener = window.api.cli.onInstallProgress(({ step, progress }) => {
-    setInstallProgress(Math.round(progress * 100))
+  // Listen for CLI progress
+  const removeCliListener = window.api.cli.onInstallProgress(({ step, progress }) => {
+    // CLI progress maps to 0-60% of total
+    setInstallProgress(Math.round(progress * 60))
     if (step.includes('Verifying')) {
       setInstallSteps([
         { label: t('setup.checkEnv'), status: 'done' },
         { label: t('setup.downloadComplete'), status: 'done' },
-        { label: t('setup.verifyingInstall'), status: 'active' }
+        { label: t('setup.verifyingInstall'), status: 'active' },
+        { label: t('setup.downloadingTools'), status: 'pending' }
       ])
-      setInstallProgress(85)
     }
   })
 
   const result = await window.api.cli.install()
-  removeListener()
+  removeCliListener()
 
-  if (result.success) {
-    setInstallProgress(100)
-    setInstallSteps([
-      { label: t('setup.checkEnv'), status: 'done' },
-      { label: t('setup.downloadComplete'), status: 'done' },
-      { label: t('setup.installComplete'), status: 'done' }
-    ])
-
-    const info = await window.api.cli.getInfo()
-    setCliInfo(info.installed, info.version)
-    setPhase('ready')
-    return true
-  } else {
+  if (!result.success) {
     setInstallError(result.error || 'Unknown error')
     setPhase('error')
     return false
   }
+
+  const info = await window.api.cli.getInfo()
+  setCliInfo(info.installed, info.version)
+
+  // CLI done — now install dev tools
+  setInstallProgress(62)
+  setInstallSteps([
+    { label: t('setup.checkEnv'), status: 'done' },
+    { label: t('setup.downloadComplete'), status: 'done' },
+    { label: t('setup.installComplete'), status: 'done' },
+    { label: t('setup.downloadingTools'), status: 'active' }
+  ])
+
+  // Check if tools already installed
+  const toolsInstalled = await window.api.tools.isAllInstalled()
+  if (toolsInstalled) {
+    setInstallProgress(100)
+    setInstallSteps([
+      { label: t('setup.checkEnv'), status: 'done' },
+      { label: t('setup.downloadComplete'), status: 'done' },
+      { label: t('setup.installComplete'), status: 'done' },
+      { label: t('setup.toolsReady'), status: 'done' }
+    ])
+    setPhase('ready')
+    return true
+  }
+
+  // Listen for tools progress
+  const removeToolsListener = window.api.tools.onInstallProgress(({ step, progress }) => {
+    // Tools progress maps to 62-100% of total
+    setInstallProgress(62 + Math.round(progress * 38))
+    if (step.includes('Verifying')) {
+      setInstallSteps([
+        { label: t('setup.checkEnv'), status: 'done' },
+        { label: t('setup.downloadComplete'), status: 'done' },
+        { label: t('setup.installComplete'), status: 'done' },
+        { label: t('setup.verifyingTools'), status: 'active' }
+      ])
+    }
+  })
+
+  const toolsResult = await window.api.tools.install()
+  removeToolsListener()
+
+  if (toolsResult.success) {
+    setInstallProgress(100)
+    setInstallSteps([
+      { label: t('setup.checkEnv'), status: 'done' },
+      { label: t('setup.downloadComplete'), status: 'done' },
+      { label: t('setup.installComplete'), status: 'done' },
+      { label: t('setup.toolsReady'), status: 'done' }
+    ])
+    setPhase('ready')
+    return true
+  } else {
+    // Tools install failed — non-blocking, proceed to ready anyway
+    setInstallSteps([
+      { label: t('setup.checkEnv'), status: 'done' },
+      { label: t('setup.downloadComplete'), status: 'done' },
+      { label: t('setup.installComplete'), status: 'done' },
+      { label: t('setup.toolsSkipped'), status: 'done' }
+    ])
+    setInstallProgress(100)
+    setPhase('ready')
+    return true
+  }
+}
+
+/** Install only tools (CLI already installed). Non-blocking — graceful degradation. */
+export async function startToolsInstall(): Promise<boolean> {
+  const { setInstallSteps, setPhase, setInstallError, setInstallProgress } = useAppStore.getState()
+  const t = getT()
+
+  setPhase('installing')
+  setInstallProgress(10)
+  setInstallSteps([
+    { label: t('setup.checkingTools'), status: 'active' }
+  ])
+
+  const removeToolsListener = window.api.tools.onInstallProgress(({ step, progress }) => {
+    setInstallProgress(10 + Math.round(progress * 90))
+    if (step.includes('Verifying')) {
+      setInstallSteps([
+        { label: t('setup.verifyingTools'), status: 'active' }
+      ])
+    } else if (step.includes('Downloading')) {
+      setInstallSteps([
+        { label: t('setup.downloadingTools'), status: 'active' }
+      ])
+    }
+  })
+
+  const toolsResult = await window.api.tools.install()
+  removeToolsListener()
+
+  if (toolsResult.success) {
+    setInstallProgress(100)
+    setInstallSteps([
+      { label: t('setup.toolsReady'), status: 'done' }
+    ])
+  } else {
+    // Non-blocking
+    setInstallSteps([
+      { label: t('setup.toolsSkipped'), status: 'done' }
+    ])
+    setInstallProgress(100)
+  }
+
+  setPhase('ready')
+  return true
 }
