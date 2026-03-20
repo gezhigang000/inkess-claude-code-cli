@@ -9,7 +9,7 @@
 export const TOOLS_MIRROR_BASE_URL =
   'https://inkess-install-file.oss-cn-beijing.aliyuncs.com/dev-tools'
 
-export type ToolName = 'python' | 'git'
+export type ToolName = 'python' | 'git' | 'node'
 
 export interface ToolDef {
   name: ToolName
@@ -46,6 +46,17 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
     platforms: ['win32-x64'],
     binPath: {
       'win32-x64': 'git/cmd/git.exe',
+    },
+    verifyCommand: ['--version'],
+  },
+  {
+    name: 'node',
+    displayName: 'Node.js',
+    platforms: ['win32-x64', 'darwin-arm64', 'darwin-x64'],
+    binPath: {
+      'win32-x64': 'node/node.exe',
+      'darwin-arm64': 'node/bin/node',
+      'darwin-x64': 'node/bin/node',
     },
     verifyCommand: ['--version'],
   },

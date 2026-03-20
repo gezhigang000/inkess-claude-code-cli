@@ -226,9 +226,10 @@ export class ToolsManager {
     }
     log.info(`Tools: ${def.name} checksum verified`)
 
-    // Extract
+    // Extract — archives contain a top-level dir matching the tool name
+    // (e.g. python/, node/, git/), so extract into toolsDir directly.
     onProgress(`Extracting ${def.displayName}...`, 0.75)
-    const extractDir = join(this.toolsDir, def.name)
+    const extractDir = this.toolsDir
     if (!existsSync(extractDir)) {
       mkdirSync(extractDir, { recursive: true })
     }
@@ -264,8 +265,9 @@ export class ToolsManager {
 
     // macOS: clear quarantine
     if (os.platform() === 'darwin') {
+      const toolDir = join(this.toolsDir, def.name)
       try {
-        execSync(`xattr -cr "${extractDir}"`, { timeout: 10000 })
+        execSync(`xattr -cr "${toolDir}"`, { timeout: 10000 })
         log.info(`Tools: cleared quarantine for ${def.name}`)
       } catch {
         log.warn(`Tools: failed to clear quarantine for ${def.name} (non-fatal)`)
