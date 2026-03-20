@@ -1,6 +1,6 @@
 import log from './logger'
 import { app, BrowserWindow, ipcMain, shell, dialog, Menu, session, nativeImage, clipboard, Notification, powerSaveBlocker } from 'electron'
-import { join } from 'path'
+import { join, resolve, normalize } from 'path'
 import { PtyManager } from './pty/pty-manager'
 import { PtyOutputMonitor, type PtyActivityEvent } from './pty/pty-output-monitor'
 import { CliManager } from './cli/cli-manager'
@@ -23,6 +23,15 @@ analytics.setTokenGetter(() => {
   try { return authManager.getToken() } catch { return null }
 })
 
+/** Safely send to renderer, swallowing errors if window is destroyed */
+function safeSend(channel: string, ...args: unknown[]): void {
+  try {
+    mainWindow?.webContents.send(channel, ...args)
+  } catch {
+    // Window may be destroyed during long-running operations
+  }
+}
+
 function createWindow(): void {
   // Set dock/taskbar icon (especially needed in dev mode)
   if (process.platform === 'darwin') {
@@ -39,7 +48,7 @@ function createWindow(): void {
     minWidth: 800,
     minHeight: 500,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
-    backgroundColor: '#1A1A2E',
+    backgroundColor: '#191919',
     icon: join(__dirname, '../../resources/icon-256.png'),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -136,7 +145,7 @@ ipcMain.handle('cli:getInfo', () => {
 ipcMain.handle('cli:install', async () => {
   try {
     await cliManager.install((step, progress) => {
-      mainWindow?.webContents.send('cli:installProgress', { step, progress })
+      safeSend('cli:installProgress', { step, progress })
     })
     analytics.track('cli_install')
     return { success: true }
@@ -153,7 +162,7 @@ ipcMain.handle('cli:checkUpdate', async () => {
 ipcMain.handle('cli:update', async () => {
   try {
     await cliManager.update((step, progress) => {
-      mainWindow?.webContents.send('cli:updateProgress', { step, progress })
+      safeSend('cli:updateProgress', { step, progress })
     })
     analytics.track('cli_update')
     return { success: true }
@@ -175,7 +184,7 @@ ipcMain.handle('tools:isAllInstalled', () => {
 ipcMain.handle('tools:install', async () => {
   try {
     await toolsManager.install((step, progress) => {
-      mainWindow?.webContents.send('tools:installProgress', { step, progress })
+      safeSend('tools:installProgress', { step, progress })
     })
     analytics.track('tools_install')
     return { success: true }
@@ -210,11 +219,11 @@ ipcMain.handle('pty:create', (_event, options: {
     const id = ptyManager.create(options.cwd, mergedEnv, command, args)
     ptyMonitor.watch(id)
     ptyManager.onData(id, (data) => {
-      mainWindow?.webContents.send('pty:data', { id, data })
+      safeSend('pty:data', { id, data })
       ptyMonitor.feed(id, data)
     })
     ptyManager.onExit(id, (exitCode) => {
-      mainWindow?.webContents.send('pty:exit', { id, exitCode })
+      safeSend('pty:exit', { id, exitCode })
       ptyMonitor.unwatch(id)
     })
     analytics.track('tab_create')
@@ -248,11 +257,13 @@ ipcMain.handle('shell:openExternal', (_event, url: string) => {
 })
 
 ipcMain.handle('shell:openPath', (_event, path: string) => {
-  if (path.includes('..')) {
+  // Normalize and resolve to catch traversal attempts (e.g. /foo/../../etc/passwd)
+  const normalized = normalize(resolve(path))
+  if (normalized !== path && path.includes('..')) {
     log.warn(`Blocked openPath with path traversal: ${path}`)
     return
   }
-  return shell.openPath(path)
+  return shell.openPath(normalized)
 })
 
 ipcMain.handle('shell:selectDirectory', async () => {
@@ -297,24 +308,24 @@ let sleepInhibitorEnabled = true
 
 // --- PTY Monitor: broadcast activity events + notifications + sleep ---
 ptyMonitor.on('activity', (event: PtyActivityEvent) => {
-  mainWindow?.webContents.send('pty:activity', event)
+  safeSend('pty:activity', event)
 
   // Desktop notification on task-complete when window is unfocused
   if (event.type === 'task-complete' && !isWindowFocused) {
-    mainWindow?.webContents.send('notification:shouldShow', event)
+    safeSend('notification:shouldShow', event)
   }
 
   // Sleep inhibitor: start when streaming, stop when all idle
   if (event.type === 'streaming') {
     if (sleepBlockerId === null && sleepInhibitorEnabled) {
       sleepBlockerId = powerSaveBlocker.start('prevent-app-suspension')
-      mainWindow?.webContents.send('power:sleepInhibitChange', true)
+      safeSend('power:sleepInhibitChange', true)
     }
   } else if (event.type === 'task-complete' || event.type === 'prompt-idle') {
     if (sleepBlockerId !== null && !ptyMonitor.isAnyStreaming()) {
       powerSaveBlocker.stop(sleepBlockerId)
       sleepBlockerId = null
-      mainWindow?.webContents.send('power:sleepInhibitChange', false)
+      safeSend('power:sleepInhibitChange', false)
     }
   }
 })
@@ -336,7 +347,7 @@ ipcMain.on('power:setSleepInhibitorEnabled', (_event, enabled: boolean) => {
   if (!enabled && sleepBlockerId !== null) {
     powerSaveBlocker.stop(sleepBlockerId)
     sleepBlockerId = null
-    mainWindow?.webContents.send('power:sleepInhibitChange', false)
+    safeSend('power:sleepInhibitChange', false)
   }
 })
 
@@ -379,7 +390,7 @@ app.whenReady().then(() => {
 
   // Forward app update status to renderer
   onUpdateStatus((status) => {
-    mainWindow?.webContents.send('appUpdate:status', status)
+    safeSend('appUpdate:status', status)
   })
 
   // Check for app updates after launch (delay 5s to not block startup)
@@ -393,15 +404,17 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
-  analytics.flushSync()
+  // Kill all PTY processes and give them a moment to terminate
   ptyManager.killAll()
   ptyMonitor.dispose()
+  analytics.flushSync()
   if (sleepBlockerId !== null) {
     powerSaveBlocker.stop(sleepBlockerId)
     sleepBlockerId = null
   }
   if (process.platform !== 'darwin') {
-    app.quit()
+    // Short delay to allow PTY processes to actually terminate
+    setTimeout(() => app.quit(), 500)
   }
 })
 
@@ -428,12 +441,12 @@ function setupMenu(): void {
         {
           label: 'New Tab',
           accelerator: `${mod}+T`,
-          click: () => mainWindow?.webContents.send('app:newTab')
+          click: () => safeSend('app:newTab')
         },
         {
           label: 'Close Tab',
           accelerator: `${mod}+W`,
-          click: () => mainWindow?.webContents.send('app:closeTab')
+          click: () => safeSend('app:closeTab')
         },
         { type: 'separator' },
         {
@@ -443,7 +456,7 @@ function setupMenu(): void {
             if (!mainWindow) return
             const result = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory'] })
             if (!result.canceled && result.filePaths[0]) {
-              mainWindow?.webContents.send('app:openFolder', result.filePaths[0])
+              safeSend('app:openFolder', result.filePaths[0])
             }
           }
         },
@@ -483,7 +496,7 @@ function setupMenu(): void {
         ...Array.from({ length: 9 }, (_, i) => ({
           label: `Tab ${i + 1}`,
           accelerator: `${mod}+${i + 1}`,
-          click: () => mainWindow?.webContents.send('app:switchTab', i)
+          click: () => safeSend('app:switchTab', i)
         }))
       ]
     },

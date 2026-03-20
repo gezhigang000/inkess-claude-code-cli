@@ -2,14 +2,14 @@
 @import "@xterm/xterm/css/xterm.css";
 
 :root, [data-theme="dark"] {
-  --bg-primary: #1A1A2E;
-  --bg-secondary: #1E1E36;
-  --bg-tertiary: #252540;
-  --bg-hover: #2A2A45;
-  --bg-active: #3A3A55;
+  --bg-primary: #191919;
+  --bg-secondary: #1E1E1E;
+  --bg-tertiary: #262626;
+  --bg-hover: #2C2C2C;
+  --bg-active: #383838;
   --text-primary: #F0EDE8;
-  --text-secondary: #A0A0B8;
-  --text-muted: #6A6A80;
+  --text-secondary: #999999;
+  --text-muted: #6B6B6B;
   --accent: #8B7355;
   --accent-hover: #7A6449;
   --accent-subtle: rgba(139, 115, 85, 0.15);
@@ -18,21 +18,21 @@
   --warning: #D69E2E;
   --error: #C53030;
   --error-text: #FC8181;
-  --border: #3A3A55;
+  --border: #333333;
   --ring: #8B7355;
   --scrollbar-thumb: rgba(255, 255, 255, 0.1);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.18);
 }
 
 [data-theme="light"] {
-  --bg-primary: #FAFAF8;
-  --bg-secondary: #F0EDE6;
-  --bg-tertiary: #E6E3DC;
-  --bg-hover: #DDD9D0;
-  --bg-active: #D0CBC0;
-  --text-primary: #1A1A2E;
-  --text-secondary: #555566;
-  --text-muted: #8888A0;
+  --bg-primary: #FFFFFF;
+  --bg-secondary: #F8F7F5;
+  --bg-tertiary: #F0EFED;
+  --bg-hover: #EEECEA;
+  --bg-active: #E5E3E0;
+  --text-primary: #1A1A1A;
+  --text-secondary: #666666;
+  --text-muted: #999999;
   --accent: #8B7355;
   --accent-hover: #7A6449;
   --accent-subtle: rgba(139, 115, 85, 0.12);
@@ -41,7 +41,7 @@
   --warning: #B8860B;
   --error: #C53030;
   --error-text: #C53030;
-  --border: #D5D0C8;
+  --border: #E8E6E3;
   --ring: #8B7355;
   --scrollbar-thumb: rgba(0, 0, 0, 0.12);
   --scrollbar-thumb-hover: rgba(0, 0, 0, 0.2);

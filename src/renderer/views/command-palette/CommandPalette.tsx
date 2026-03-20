@@ -157,6 +157,8 @@ export function CommandPalette({ onClose, onNewTab, onSettings, onToggleTheme }:
               <div style={{
                 padding: '6px 16px', fontSize: 11, fontWeight: 600,
                 color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5,
+                borderLeft: '2px solid var(--accent)', marginLeft: 8,
+                paddingLeft: 8,
               }}>
                 {group.category}
               </div>

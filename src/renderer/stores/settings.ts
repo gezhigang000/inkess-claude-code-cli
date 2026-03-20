@@ -5,6 +5,9 @@ const STORAGE_KEY = 'inkess-settings'
 type ThemeChoice = 'auto' | 'dark' | 'light'
 type LanguageChoice = 'auto' | 'zh' | 'en'
 
+const VALID_THEMES: ThemeChoice[] = ['auto', 'dark', 'light']
+const VALID_LANGUAGES: LanguageChoice[] = ['auto', 'zh', 'en']
+
 interface SettingsState {
   fontSize: number
   ideChoice: string
@@ -31,7 +34,8 @@ function loadSettings(): Partial<SettingsState> {
   return {}
 }
 
-function saveSettings(state: Pick<SettingsState, 'fontSize' | 'ideChoice' | 'language' | 'theme' | 'notificationsEnabled' | 'notificationSound' | 'sleepInhibitorEnabled'>) {
+/** Persist only serializable settings fields atomically from current store state */
+function persistSettings(state: SettingsState) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       fontSize: state.fontSize,
@@ -58,27 +62,34 @@ export function applyTheme(theme: ThemeChoice) {
 
 const saved = loadSettings()
 
-export const useSettingsStore = create<SettingsState>((set, get) => ({
-  fontSize: saved.fontSize ?? 14,
-  ideChoice: saved.ideChoice ?? 'vscode',
-  language: (saved as any).language ?? 'auto',
-  theme: (saved as any).theme ?? 'auto',
-  notificationsEnabled: (saved as any).notificationsEnabled ?? true,
-  notificationSound: (saved as any).notificationSound ?? true,
-  sleepInhibitorEnabled: (saved as any).sleepInhibitorEnabled ?? true,
+// Validate loaded values to prevent corrupted localStorage from breaking the app
+const validatedTheme: ThemeChoice = VALID_THEMES.includes((saved as any).theme) ? (saved as any).theme : 'auto'
+const validatedLanguage: LanguageChoice = VALID_LANGUAGES.includes((saved as any).language) ? (saved as any).language : 'auto'
+const validatedFontSize = typeof saved.fontSize === 'number' && saved.fontSize >= 10 && saved.fontSize <= 24 ? saved.fontSize : 14
 
-  setFontSize: (v) => { set({ fontSize: v }); saveSettings({ ...get(), fontSize: v }) },
-  setIdeChoice: (v) => { set({ ideChoice: v }); saveSettings({ ...get(), ideChoice: v }) },
-  setLanguage: (v) => { set({ language: v }); saveSettings({ ...get(), language: v }) },
-  setTheme: (v) => { set({ theme: v }); applyTheme(v); saveSettings({ ...get(), theme: v }) },
-  setNotificationsEnabled: (v) => { set({ notificationsEnabled: v }); saveSettings({ ...get(), notificationsEnabled: v }) },
-  setNotificationSound: (v) => { set({ notificationSound: v }); saveSettings({ ...get(), notificationSound: v }) },
+export const useSettingsStore = create<SettingsState>((set, get) => ({
+  fontSize: validatedFontSize,
+  ideChoice: saved.ideChoice ?? 'vscode',
+  language: validatedLanguage,
+  theme: validatedTheme,
+  notificationsEnabled: typeof (saved as any).notificationsEnabled === 'boolean' ? (saved as any).notificationsEnabled : true,
+  notificationSound: typeof (saved as any).notificationSound === 'boolean' ? (saved as any).notificationSound : true,
+  sleepInhibitorEnabled: typeof (saved as any).sleepInhibitorEnabled === 'boolean' ? (saved as any).sleepInhibitorEnabled : true,
+
+  // Each setter: set() first (synchronous), then persist the full post-set state
+  // This avoids the race where get() returns stale pre-set values
+  setFontSize: (v) => { set({ fontSize: v }); persistSettings(get()) },
+  setIdeChoice: (v) => { set({ ideChoice: v }); persistSettings(get()) },
+  setLanguage: (v) => { set({ language: v }); persistSettings(get()) },
+  setTheme: (v) => { set({ theme: v }); applyTheme(v); persistSettings(get()) },
+  setNotificationsEnabled: (v) => { set({ notificationsEnabled: v }); persistSettings(get()) },
+  setNotificationSound: (v) => { set({ notificationSound: v }); persistSettings(get()) },
   setSleepInhibitorEnabled: (v) => {
     set({ sleepInhibitorEnabled: v })
-    saveSettings({ ...get(), sleepInhibitorEnabled: v })
+    persistSettings(get())
     window.api?.power?.setSleepInhibitorEnabled(v)
   },
 }))
 
 // Apply theme on load
-applyTheme((saved as any).theme ?? 'auto')
+applyTheme(validatedTheme)

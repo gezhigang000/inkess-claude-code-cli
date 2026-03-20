@@ -95,12 +95,17 @@ function LoginForm({ onSuccess, onError }: { onSuccess: () => void; onError: (e:
     if (!login || !password) return
     setLoading(true)
     onError('')
-    const result = await window.api.auth.login(login, password)
-    setLoading(false)
-    if (result.success) {
-      onSuccess()
-    } else {
-      onError(result.error || t('login.loginFailed'))
+    try {
+      const result = await window.api.auth.login(login, password)
+      if (result.success) {
+        onSuccess()
+      } else {
+        onError(result.error || t('login.loginFailed'))
+      }
+    } catch {
+      onError(t('login.loginFailed'))
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -173,23 +178,28 @@ function RegisterForm({ onSuccess, onError, onMessage }: {
     if (!email || countdown > 0) return
     setCodeSending(true)
     onError('')
-    const result = await window.api.auth.sendCode(email)
-    setCodeSending(false)
-    if (result.success) {
-      onMessage(t('login.codeSent'))
-      setCountdown(60)
-      timerRef.current = setInterval(() => {
-        setCountdown(prev => {
-          if (prev <= 1) {
-            if (timerRef.current) clearInterval(timerRef.current)
-            timerRef.current = null
-            return 0
-          }
-          return prev - 1
-        })
-      }, 1000)
-    } else {
-      onError(result.error || t('login.sendCodeFailed'))
+    try {
+      const result = await window.api.auth.sendCode(email)
+      if (result.success) {
+        onMessage(t('login.codeSent'))
+        setCountdown(60)
+        timerRef.current = setInterval(() => {
+          setCountdown(prev => {
+            if (prev <= 1) {
+              if (timerRef.current) clearInterval(timerRef.current)
+              timerRef.current = null
+              return 0
+            }
+            return prev - 1
+          })
+        }, 1000)
+      } else {
+        onError(result.error || t('login.sendCodeFailed'))
+      }
+    } catch {
+      onError(t('login.sendCodeFailed'))
+    } finally {
+      setCodeSending(false)
     }
   }, [email, countdown, onError, onMessage, t])
 
@@ -198,16 +208,21 @@ function RegisterForm({ onSuccess, onError, onMessage }: {
     if (!email || !code || !password) return
     setLoading(true)
     onError('')
-    const result = await window.api.auth.register(
-      email, password, code,
-      username || undefined,
-      referralCode || undefined
-    )
-    setLoading(false)
-    if (result.success) {
-      onSuccess()
-    } else {
-      onError(result.error || t('login.registrationFailed'))
+    try {
+      const result = await window.api.auth.register(
+        email, password, code,
+        username || undefined,
+        referralCode || undefined
+      )
+      if (result.success) {
+        onSuccess()
+      } else {
+        onError(result.error || t('login.registrationFailed'))
+      }
+    } catch {
+      onError(t('login.registrationFailed'))
+    } finally {
+      setLoading(false)
     }
   }
 

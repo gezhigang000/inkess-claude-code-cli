@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useTerminalStore } from '../../stores/terminal'
 import { useAuthStore } from '../../stores/auth'
 import { useSettingsStore } from '../../stores/settings'
@@ -16,6 +16,16 @@ const MODE_COMMANDS: Record<string, string> = {
   fullauto: '/permissions full-auto\n',
 }
 
+/** Simplify model name: "claude-sonnet-4-20250514" → "Sonnet 4" */
+function simplifyModel(model: string): string {
+  const m = model.toLowerCase()
+  if (m.includes('opus')) return 'Opus' + (m.includes('-4') ? ' 4' : '')
+  if (m.includes('sonnet')) return 'Sonnet' + (m.includes('-4') ? ' 4' : m.includes('-3') ? ' 3.5' : '')
+  if (m.includes('haiku')) return 'Haiku' + (m.includes('-4') ? ' 4' : m.includes('-3') ? ' 3.5' : '')
+  // Fallback: return first meaningful segment
+  return model.split('-').slice(0, 2).join(' ')
+}
+
 export function StatusBar() {
   const { tabs, activeTabId, updateTab } = useTerminalStore()
   const { balance } = useAuthStore()
@@ -23,8 +33,15 @@ export function StatusBar() {
   const { t } = useI18n()
   const [sleepActive, setSleepActive] = useState(false)
   const [windowWidth, setWindowWidth] = useState(window.innerWidth)
+  const [modeFlash, setModeFlash] = useState<string | null>(null)
+  const modeFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId)
+
+  // Clean up flash timer on unmount
+  useEffect(() => {
+    return () => { if (modeFlashTimerRef.current) clearTimeout(modeFlashTimerRef.current) }
+  }, [])
 
   // Fetch git branch for active tab
   useEffect(() => {
@@ -65,13 +82,18 @@ export function StatusBar() {
     return () => window.removeEventListener('resize', handler)
   }, [])
 
-  const isCompact = windowWidth < 900
+  const isCompact = windowWidth < 700
+  const isMedium = windowWidth < 900
   const currentMode = activeTab?.mode || 'suggest'
 
   const handleModeClick = (mode: string) => {
     if (!activeTab?.ptyId || activeTab?.isRunning) return
     window.api.pty.write(activeTab.ptyId, MODE_COMMANDS[mode])
     updateTab(activeTab.id, { mode: mode as any })
+    // Flash feedback
+    setModeFlash(mode)
+    if (modeFlashTimerRef.current) clearTimeout(modeFlashTimerRef.current)
+    modeFlashTimerRef.current = setTimeout(() => setModeFlash(null), 300)
   }
 
   const truncateBranch = (branch: string) =>
@@ -83,27 +105,28 @@ export function StatusBar() {
       alignItems: 'center', padding: '0 12px', borderTop: '1px solid var(--border)',
       fontSize: 12, color: 'var(--text-muted)', flexShrink: 0, gap: 12
     }}>
-      {/* Connection status */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+      {/* Connection status — green dot only, no text when connected */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }} title={t('app.connected')}>
         <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)' }} />
-        {t('app.connected')}
       </div>
 
-      {/* Git branch */}
-      {!isCompact && activeTab?.gitBranch && (
+      {/* Git branch — SVG icon */}
+      {!isMedium && activeTab?.gitBranch && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }} title={activeTab.gitBranch}>
-          <span style={{ fontSize: 11 }}>⎇</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M6 15V9a6 6 0 006 6h3" />
+          </svg>
           {truncateBranch(activeTab.gitBranch)}
         </div>
       )}
 
-      {/* Model */}
-      {!isCompact && activeTab?.model && (
-        <div>{activeTab.model}</div>
+      {/* Model — simplified name */}
+      {!isMedium && activeTab?.model && (
+        <div title={activeTab.model}>{simplifyModel(activeTab.model)}</div>
       )}
 
       {/* Thinking shimmer */}
-      {activeTab?.isRunning && (
+      {!isCompact && activeTab?.isRunning && (
         <div className="shimmer-text" style={{
           background: 'linear-gradient(90deg, var(--text-muted) 25%, var(--accent) 50%, var(--text-muted) 75%)',
           backgroundSize: '200% 100%',
@@ -124,28 +147,32 @@ export function StatusBar() {
 
       <div style={{ flex: 1 }} />
 
-      {/* Mode switcher (F7) */}
+      {/* Mode switcher with flash feedback */}
       <div style={{ display: 'flex', height: 18, borderRadius: 4, overflow: 'hidden', border: '1px solid var(--border)' }}>
-        {MODES.map((mode) => (
-          <div
-            key={mode}
-            onClick={() => handleModeClick(mode)}
-            style={{
-              padding: '0 8px', fontSize: 11, lineHeight: '18px', cursor: 'pointer',
-              background: currentMode === mode ? 'var(--accent)' : 'transparent',
-              color: currentMode === mode ? '#fff' : 'var(--text-muted)',
-              transition: 'background 0.2s, color 0.2s',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {MODE_LABELS[mode]}
-          </div>
-        ))}
+        {MODES.map((mode) => {
+          const isActive = currentMode === mode
+          const isFlashing = modeFlash === mode
+          return (
+            <div
+              key={mode}
+              onClick={() => handleModeClick(mode)}
+              style={{
+                padding: '0 8px', fontSize: 11, lineHeight: '18px', cursor: 'pointer',
+                background: isFlashing ? 'var(--accent-hover)' : isActive ? 'var(--accent)' : 'transparent',
+                color: isActive ? '#fff' : 'var(--text-muted)',
+                transition: 'background 0.2s, color 0.2s',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {MODE_LABELS[mode]}
+            </div>
+          )
+        })}
       </div>
 
-      {/* Balance */}
-      <div>
-        {t('app.balance')}: ¥{(balance / 100).toFixed(2)}
+      {/* Balance — simplified */}
+      <div title={`${t('app.balance')}: ¥${(balance / 100).toFixed(2)}`}>
+        ¥{(balance / 100).toFixed(2)}
       </div>
     </div>
   )

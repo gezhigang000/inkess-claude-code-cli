@@ -1,6 +1,6 @@
 import { app, safeStorage } from 'electron'
 import { join } from 'path'
-import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from 'fs'
+import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, renameSync } from 'fs'
 import log from '../logger'
 
 const API_BASE = 'https://llm.starapp.net'
@@ -57,6 +57,7 @@ export class AuthManager {
   private legacyFile: string
   private authData: AuthData | null = null
   private useEncryption: boolean
+  private balanceInFlight: Promise<{ balance: number; error?: string }> | null = null
 
   constructor() {
     this.dataDir = join(app.getPath('userData'), 'auth')
@@ -81,7 +82,10 @@ export class AuthManager {
       if (this.useEncryption) {
         if (!existsSync(this.dataDir)) mkdirSync(this.dataDir, { recursive: true })
         const encrypted = safeStorage.encryptString(raw)
-        writeFileSync(this.encFile, encrypted)
+        // Atomic write: tmp → rename
+        const tmpEnc = this.encFile + '.tmp'
+        writeFileSync(tmpEnc, encrypted)
+        renameSync(tmpEnc, this.encFile)
       } else {
         // No encryption available, keep as-is (will be read from legacy path)
         return
@@ -258,25 +262,36 @@ export class AuthManager {
   }
 
   async getBalance(): Promise<{ balance: number; error?: string }> {
-    const token = this.getToken()
-    if (!token) return { balance: 0, error: 'Not logged in' }
+    // Deduplicate concurrent calls to prevent write races on save()
+    if (this.balanceInFlight) return this.balanceInFlight
+
+    this.balanceInFlight = (async () => {
+      const token = this.getToken()
+      if (!token) return { balance: 0, error: 'Not logged in' }
+
+      try {
+        const res = await fetchWithTimeout(`${API_BASE}/api/llm/desktop/me`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+
+        if (!res.ok) return { balance: 0, error: httpErrorMessage(res.status, 'Get balance') }
+
+        const data = await res.json() as { balance: number }
+        // Update cached user balance
+        if (this.authData) {
+          this.authData.user.balance = data.balance
+          this.save()
+        }
+        return { balance: data.balance }
+      } catch (err) {
+        return { balance: 0, error: catchErrorMessage(err) }
+      }
+    })()
 
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/api/llm/desktop/me`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-
-      if (!res.ok) return { balance: 0, error: httpErrorMessage(res.status, 'Get balance') }
-
-      const data = await res.json() as { balance: number }
-      // Update cached user balance
-      if (this.authData) {
-        this.authData.user.balance = data.balance
-        this.save()
-      }
-      return { balance: data.balance }
-    } catch (err) {
-      return { balance: 0, error: catchErrorMessage(err) }
+      return await this.balanceInFlight
+    } finally {
+      this.balanceInFlight = null
     }
   }
 

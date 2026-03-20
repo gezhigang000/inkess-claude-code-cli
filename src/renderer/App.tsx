@@ -178,7 +178,7 @@ export function App() {
       }),
       window.api.menu.onOpenFolder((path) => handleNewTab(path))
     ]
-    return () => unsubs.forEach(fn => fn())
+    return () => unsubs.forEach(fn => { try { fn?.() } catch { /* ignore */ } })
   }, [handleSelectDirectory, handleCloseTab, activeTabId, tabs, setActiveTab])
 
   // Mark tabs as exited when PTY exits
@@ -328,10 +328,14 @@ export function App() {
         onSelect={setActiveTab}
         onClose={handleCloseTab}
         onNew={handleSelectDirectory}
+        onCommandPalette={() => setShowCommandPalette(true)}
+        onSettings={() => { setShowSettings(true); window.api.analytics?.track('settings_open') }}
       />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <Sidebar
           onSettings={() => { setShowSettings(true); window.api.analytics?.track('settings_open') }}
+          onNewSession={handleSelectDirectory}
+          onCommandPalette={() => setShowCommandPalette(true)}
           onOpenProject={(cwd) => {
             const existing = tabs.find(t => t.cwd === cwd)
             if (existing) {
@@ -425,11 +429,13 @@ export function getRecentProjects(): string[] {
 
 import type { TerminalTab } from './stores/terminal'
 
-function TitleTabBar({ tabs, activeTabId, onSelect, onClose, onNew, pendingCloseTabId }: {
+function TitleTabBar({ tabs, activeTabId, onSelect, onClose, onNew, pendingCloseTabId, onCommandPalette, onSettings }: {
   tabs: TerminalTab[]; activeTabId: string | null; pendingCloseTabId: string | null
   onSelect: (id: string) => void; onClose: (id: string) => void; onNew: () => void
+  onCommandPalette?: () => void; onSettings?: () => void
 }) {
   const [hoveredTab, setHoveredTab] = useState<string | null>(null)
+  const [hoveredBtn, setHoveredBtn] = useState<string | null>(null)
   const [contextMenu, setContextMenu] = useState<{ tabId: string; x: number; y: number } | null>(null)
   const { t } = useI18n()
 
@@ -463,7 +469,9 @@ function TitleTabBar({ tabs, activeTabId, onSelect, onClose, onNew, pendingClose
               display: 'flex', alignItems: 'center', gap: 6, padding: '0 12px', fontSize: 12,
               color: isActive ? 'var(--text-primary)' : 'var(--text-muted)',
               cursor: 'pointer',
-              borderBottom: isActive ? '2px solid var(--accent)' : '2px solid transparent'
+              background: isActive ? 'var(--bg-hover)' : 'transparent',
+              borderBottom: isActive ? '2px solid var(--accent)' : '2px solid transparent',
+              transition: 'background 0.12s',
             }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -478,8 +486,8 @@ function TitleTabBar({ tabs, activeTabId, onSelect, onClose, onNew, pendingClose
                     width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center',
                     borderRadius: 4, fontSize: 14, marginLeft: 2,
                     opacity: (isHovered || isActive || isPendingClose) ? 0.7 : 0,
-                    background: isPendingClose ? 'var(--error)' : (isHovered ? 'var(--bg-hover)' : 'transparent'),
-                    color: isPendingClose ? '#fff' : 'inherit',
+                    background: isPendingClose ? 'var(--error)' : 'transparent',
+                    color: isPendingClose ? '#fff' : 'var(--text-muted)',
                     transition: 'opacity 0.15s, background 0.15s, color 0.15s',
                   }}
                   onMouseEnter={(e) => { if (!isPendingClose) { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = 'var(--bg-active)' } }}
@@ -500,12 +508,58 @@ function TitleTabBar({ tabs, activeTabId, onSelect, onClose, onNew, pendingClose
           </div>
         )
       })}
+      {/* New tab button with hover circle */}
       <div
         className="titlebar-no-drag"
         onClick={onNew}
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16 }}
+        onMouseEnter={() => setHoveredBtn('new')}
+        onMouseLeave={() => setHoveredBtn(null)}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          width: 28, height: 28, alignSelf: 'center',
+          color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16,
+          borderRadius: 6,
+          background: hoveredBtn === 'new' ? 'var(--bg-hover)' : 'transparent',
+          transition: 'background 0.12s',
+        }}
       >+</div>
       <div style={{ flex: 1 }} />
+      {/* Right-side controls */}
+      <div className="titlebar-no-drag" style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        <div
+          onClick={onCommandPalette}
+          onMouseEnter={() => setHoveredBtn('cmd')}
+          onMouseLeave={() => setHoveredBtn(null)}
+          title="Commands (⌘K)"
+          style={{
+            width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            borderRadius: 6, cursor: 'pointer', color: 'var(--text-muted)',
+            background: hoveredBtn === 'cmd' ? 'var(--bg-hover)' : 'transparent',
+            transition: 'background 0.12s',
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+        </div>
+        <div
+          onClick={onSettings}
+          onMouseEnter={() => setHoveredBtn('settings')}
+          onMouseLeave={() => setHoveredBtn(null)}
+          title="Settings"
+          style={{
+            width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            borderRadius: 6, cursor: 'pointer', color: 'var(--text-muted)',
+            background: hoveredBtn === 'settings' ? 'var(--bg-hover)' : 'transparent',
+            transition: 'background 0.12s',
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.32 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
+          </svg>
+        </div>
+      </div>
       {!isMac && <div style={{ width: 140 }} />}
       {contextMenu && (
         <TabContextMenu
@@ -600,31 +654,95 @@ function WelcomeScreen({ onOpenFolder, onOpenProject }: { onOpenFolder: () => vo
   const [hovered, setHovered] = useState<string | null>(null)
   const recentDirs = getRecentProjects()
 
+  const cards = [
+    ...(recentDirs.length > 0
+      ? [{
+          key: 'recent',
+          icon: (
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.5">
+              <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+            </svg>
+          ),
+          title: t('welcome.cardRecent'),
+          desc: t('welcome.cardRecentDesc'),
+          onClick: () => onOpenProject(recentDirs[0]),
+        }]
+      : []),
+    {
+      key: 'open',
+      icon: (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.5">
+          <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
+        </svg>
+      ),
+      title: t('welcome.cardNew'),
+      desc: t('welcome.cardNewDesc'),
+      onClick: onOpenFolder,
+    },
+  ]
+
   return (
     <div style={{
       flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
-      justifyContent: 'center', gap: 24, padding: 32
+      justifyContent: 'center', gap: 16, padding: 32
     }}>
-      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1">
-        <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
-      </svg>
+      {/* Brand icon */}
+      <div style={{
+        width: 64, height: 64, borderRadius: 16, background: 'var(--accent-subtle)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 4
+      }}>
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.5">
+          <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
+        </svg>
+      </div>
 
-      <button
-        onClick={onOpenFolder}
-        onMouseEnter={() => setHovered('open')}
-        onMouseLeave={() => setHovered(null)}
-        style={{
-          padding: '10px 28px', borderRadius: 6, border: 'none',
-          background: hovered === 'open' ? 'var(--accent-hover, var(--accent))' : 'var(--accent)',
-          color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 500,
-          transition: 'background 0.15s'
-        }}
-      >
-        {t('welcome.openFolder')}
-      </button>
+      {/* Heading */}
+      <div style={{ textAlign: 'center', marginBottom: 8 }}>
+        <div style={{ fontSize: 22, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
+          {t('welcome.letsBuild')}
+        </div>
+        <div
+          onClick={onOpenFolder}
+          onMouseEnter={() => setHovered('title')}
+          onMouseLeave={() => setHovered(null)}
+          style={{
+            fontSize: 15, color: 'var(--text-muted)', cursor: 'pointer',
+            opacity: hovered === 'title' ? 0.8 : 1, transition: 'opacity 0.15s',
+          }}
+        >
+          {t('welcome.openProject')} <span style={{ fontSize: 12 }}>▾</span>
+        </div>
+      </div>
 
+      {/* Guide cards */}
+      <div style={{
+        display: 'flex', gap: 12, marginTop: 24, marginBottom: 16, flexWrap: 'wrap', justifyContent: 'center'
+      }}>
+        {cards.map((card) => (
+          <div
+            key={card.key}
+            onClick={card.onClick}
+            onMouseEnter={() => setHovered(card.key)}
+            onMouseLeave={() => setHovered(null)}
+            style={{
+              width: 200, padding: '16px 16px 14px', borderRadius: 10,
+              border: '1px solid var(--border)', cursor: 'pointer',
+              background: hovered === card.key ? 'var(--bg-hover)' : 'transparent',
+              transform: hovered === card.key ? 'translateY(-2px)' : 'none',
+              boxShadow: hovered === card.key ? '0 4px 12px rgba(0,0,0,0.15)' : 'none',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <div style={{ marginBottom: 10 }}>{card.icon}</div>
+            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 3 }}>{card.title}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{card.desc}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Recent projects list */}
       {recentDirs.length > 0 && (
-        <div style={{ width: '100%', maxWidth: 400, marginTop: 8 }}>
+        <div style={{ width: '100%', maxWidth: 420, marginTop: 8 }}>
           <div style={{
             fontSize: 11, fontWeight: 600, color: 'var(--text-muted)',
             textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8

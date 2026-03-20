@@ -226,8 +226,12 @@ export async function startInstall(): Promise<boolean> {
     }
   })
 
-  const result = await window.api.cli.install()
-  removeCliListener()
+  let result: { success: boolean; error?: string }
+  try {
+    result = await window.api.cli.install()
+  } finally {
+    removeCliListener()
+  }
 
   if (!result.success) {
     setInstallError(result.error || 'Unknown error')
@@ -275,8 +279,12 @@ export async function startInstall(): Promise<boolean> {
     }
   })
 
-  const toolsResult = await window.api.tools.install()
-  removeToolsListener()
+  let toolsResult: { success: boolean; error?: string }
+  try {
+    toolsResult = await window.api.tools.install()
+  } finally {
+    removeToolsListener()
+  }
 
   if (toolsResult.success) {
     setInstallProgress(100)
@@ -326,8 +334,12 @@ export async function startToolsInstall(): Promise<boolean> {
     }
   })
 
-  const toolsResult = await window.api.tools.install()
-  removeToolsListener()
+  let toolsResult: { success: boolean; error?: string }
+  try {
+    toolsResult = await window.api.tools.install()
+  } finally {
+    removeToolsListener()
+  }
 
   if (toolsResult.success) {
     setInstallProgress(100)

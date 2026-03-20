@@ -23,6 +23,8 @@ export class PtyOutputMonitor extends EventEmitter {
 
   /** Strip ANSI escape sequences for clean pattern matching */
   private static stripAnsi(str: string): string {
+    // Limit input length to prevent regex DoS on large/malformed sequences
+    if (str.length > 10000) str = str.slice(-10000)
     // eslint-disable-next-line no-control-regex
     return str.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\].*?(?:\x07|\x1B\\))/g, '')
   }
@@ -103,5 +105,6 @@ export class PtyOutputMonitor extends EventEmitter {
     for (const id of ids) {
       this.unwatch(id)
     }
+    this.removeAllListeners()
   }
 }

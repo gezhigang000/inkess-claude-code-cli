@@ -63,6 +63,7 @@ export const en = {
   // Settings
   'settings.title': 'Settings',
   'settings.account': 'Account',
+  'settings.billing': 'Billing',
   'settings.appearance': 'Appearance',
   'settings.language': 'Language',
   'settings.balance': 'Balance',
@@ -92,6 +93,12 @@ export const en = {
   'welcome.openFolder': 'Open Working Directory',
   'welcome.recentProjects': 'Recent Projects',
   'welcome.noRecent': 'Open a working directory to get started',
+  'welcome.letsBuild': "Let's build",
+  'welcome.openProject': 'Open a project',
+  'welcome.cardRecent': 'Open a recent project',
+  'welcome.cardRecentDesc': 'Continue where you left off',
+  'welcome.cardNew': 'Open folder',
+  'welcome.cardNewDesc': 'Start working on a project',
 
   // Sidebar
   'sidebar.recentProjects': 'Recent Projects',
@@ -102,6 +109,9 @@ export const en = {
   'sidebar.active': 'Active',
   'sidebar.recent': 'Recent',
   'sidebar.yesterday': 'yesterday',
+  'sidebar.newSession': 'New Session',
+  'sidebar.commands': 'Commands',
+  'sidebar.projects': 'Projects',
 
   // StatusBar
   'statusbar.preventingSleep': 'Preventing sleep',
@@ -116,7 +126,7 @@ export const en = {
   'settings.sleepInhibitorEnabled': 'Prevent sleep during tasks',
 
   // Command Palette
-  'cmdPalette.placeholder': 'Type a command...',
+  'cmdPalette.placeholder': 'Type a command, / for Claude commands, ⇧Tab to switch mode',
   'cmdPalette.noResults': 'No matching commands',
   'cmdPalette.newTab': 'New Tab',
   'cmdPalette.settings': 'Settings',

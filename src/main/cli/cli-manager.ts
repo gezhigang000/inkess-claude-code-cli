@@ -184,7 +184,12 @@ export class CliManager {
       }
     })
 
-    await pipeline(Readable.fromWeb(progressStream as any), fileStream)
+    try {
+      await pipeline(Readable.fromWeb(progressStream as any), fileStream)
+    } catch (err) {
+      try { unlinkSync(tmpPath) } catch { /* ignore */ }
+      throw err
+    }
 
     // Verify sha256 checksum
     onProgress?.('Verifying checksum...', 0.82)
@@ -197,8 +202,25 @@ export class CliManager {
     }
     log.info('CLI: checksum verified')
 
-    // Move to final path
-    renameSync(tmpPath, this.binaryPath)
+    // Move to final path (backup existing binary first)
+    if (existsSync(this.binaryPath)) {
+      const bakPath = this.binaryPath + '.install-bak'
+      try {
+        copyFileSync(this.binaryPath, bakPath)
+        renameSync(tmpPath, this.binaryPath)
+        try { unlinkSync(bakPath) } catch { /* ignore */ }
+      } catch (err) {
+        // Restore backup on failure
+        if (existsSync(bakPath)) {
+          try { copyFileSync(bakPath, this.binaryPath) } catch { /* ignore */ }
+          try { unlinkSync(bakPath) } catch { /* ignore */ }
+        }
+        try { unlinkSync(tmpPath) } catch { /* ignore */ }
+        throw err
+      }
+    } else {
+      renameSync(tmpPath, this.binaryPath)
+    }
 
     // Set executable permission on unix
     if (platform !== 'win32') {

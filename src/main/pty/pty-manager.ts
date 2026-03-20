@@ -50,6 +50,8 @@ export class PtyManager {
 
       ptyProcess.onExit(({ exitCode }) => {
         session.onExitCallbacks.forEach((cb) => cb(exitCode))
+        session.onDataCallbacks = []
+        session.onExitCallbacks = []
         this.sessions.delete(id)
       })
 

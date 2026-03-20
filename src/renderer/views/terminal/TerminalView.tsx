@@ -29,12 +29,12 @@ export function TerminalView({ ptyId, isActive }: TerminalViewProps) {
 
     const term = new Terminal({
       theme: {
-        background: '#1A1A2E',
+        background: '#191919',
         foreground: '#F0EDE8',
         cursor: '#8B7355',
-        cursorAccent: '#1A1A2E',
+        cursorAccent: '#191919',
         selectionBackground: 'rgba(139, 115, 85, 0.3)',
-        black: '#1A1A2E',
+        black: '#191919',
         red: '#FC8181',
         green: '#68D391',
         yellow: '#ECC94B',
@@ -42,7 +42,7 @@ export function TerminalView({ ptyId, isActive }: TerminalViewProps) {
         magenta: '#BB9AF7',
         cyan: '#7DCFFF',
         white: '#F0EDE8',
-        brightBlack: '#6A6A80',
+        brightBlack: '#6B6B6B',
         brightRed: '#FC8181',
         brightGreen: '#68D391',
         brightYellow: '#ECC94B',
@@ -98,7 +98,7 @@ export function TerminalView({ ptyId, isActive }: TerminalViewProps) {
 
     return () => {
       disposable.dispose()
-      removeDataListener()
+      try { removeDataListener?.() } catch { /* ignore */ }
       resizeObserver.disconnect()
       term.dispose()
     }

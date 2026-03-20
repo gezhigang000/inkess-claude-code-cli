@@ -65,6 +65,7 @@ export const zh: Record<TranslationKey, string> = {
   // Settings
   'settings.title': '设置',
   'settings.account': '账号',
+  'settings.billing': '账单',
   'settings.appearance': '外观',
   'settings.language': '语言',
   'settings.balance': '余额',
@@ -94,6 +95,12 @@ export const zh: Record<TranslationKey, string> = {
   'welcome.openFolder': '打开工作目录',
   'welcome.recentProjects': '最近项目',
   'welcome.noRecent': '打开一个工作目录开始使用',
+  'welcome.letsBuild': '开始构建',
+  'welcome.openProject': '打开项目',
+  'welcome.cardRecent': '打开最近项目',
+  'welcome.cardRecentDesc': '继续上次的工作',
+  'welcome.cardNew': '打开文件夹',
+  'welcome.cardNewDesc': '开始一个项目',
 
   // Sidebar
   'sidebar.recentProjects': '最近项目',
@@ -104,6 +111,9 @@ export const zh: Record<TranslationKey, string> = {
   'sidebar.active': '活跃',
   'sidebar.recent': '最近',
   'sidebar.yesterday': '昨天',
+  'sidebar.newSession': '新建会话',
+  'sidebar.commands': '命令',
+  'sidebar.projects': '项目',
 
   // StatusBar
   'statusbar.preventingSleep': '阻止休眠中',
@@ -118,7 +128,7 @@ export const zh: Record<TranslationKey, string> = {
   'settings.sleepInhibitorEnabled': '任务执行时阻止系统休眠',
 
   // Command Palette
-  'cmdPalette.placeholder': '输入命令...',
+  'cmdPalette.placeholder': '输入命令, / 输入 Claude 命令, ⇧Tab 切换模式',
   'cmdPalette.noResults': '没有匹配的命令',
   'cmdPalette.newTab': '新建标签页',
   'cmdPalette.settings': '设置',
