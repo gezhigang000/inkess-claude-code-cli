@@ -19,6 +19,10 @@ export interface ToolDef {
   platforms: string[]
   /** Relative path under the extracted tool dir to the binary */
   binPath: Record<string, string>
+  /** Additional bin directories to prepend to PATH (relative to toolsDir) */
+  extraPathDirs?: Record<string, string[]>
+  /** Extra environment variables to set (relative paths resolved against toolsDir) */
+  extraEnv?: Record<string, Record<string, string>>
   /** Command + args to verify the tool works */
   verifyCommand: string[]
 }
@@ -46,6 +50,14 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
     platforms: ['win32-x64'],
     binPath: {
       'win32-x64': 'git/cmd/git.exe',
+    },
+    // Claude Code on Windows requires git-bash; add git/bin (contains bash.exe) to PATH
+    // and set CLAUDE_CODE_GIT_BASH_PATH so Claude Code can find bash.exe
+    extraPathDirs: {
+      'win32-x64': ['git/bin'],
+    },
+    extraEnv: {
+      'win32-x64': { CLAUDE_CODE_GIT_BASH_PATH: 'git/bin/bash.exe' },
     },
     verifyCommand: ['--version'],
   },

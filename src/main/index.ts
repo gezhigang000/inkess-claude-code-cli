@@ -359,7 +359,10 @@ ipcMain.on('power:setSleepInhibitorEnabled', (_event, enabled: boolean) => {
 ipcMain.handle('git:getBranch', async (_event, cwd: string) => {
   try {
     const { execSync } = require('child_process')
-    const branch = execSync('git rev-parse --abbrev-ref HEAD', { cwd, encoding: 'utf-8', timeout: 3000 }).trim()
+    // Use bundled tools PATH so git is found even without system git
+    const toolsEnv = toolsManager.getEnvPatch()
+    const env = { ...process.env, ...toolsEnv }
+    const branch = execSync('git rev-parse --abbrev-ref HEAD', { cwd, encoding: 'utf-8', timeout: 3000, env }).trim()
     return branch || null
   } catch {
     return null

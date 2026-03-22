@@ -297,7 +297,14 @@ export async function startInstall(): Promise<boolean> {
     setPhase('ready')
     return true
   } else {
-    // Tools install failed — non-blocking, proceed to ready anyway
+    // Windows: tools (especially git-bash) are required for Claude Code
+    // macOS: tools are optional (system git exists), graceful degradation
+    if (window.api.platform === 'win32') {
+      setInstallError(toolsResult.error || 'Failed to install required tools (Git). Please retry.')
+      setPhase('error')
+      return false
+    }
+    // Non-Windows: non-blocking, proceed to ready
     setInstallSteps([
       { label: t('setup.checkEnv'), status: 'done' },
       { label: t('setup.downloadComplete'), status: 'done' },
@@ -347,7 +354,12 @@ export async function startToolsInstall(): Promise<boolean> {
       { label: t('setup.toolsReady'), status: 'done' }
     ])
   } else {
-    // Non-blocking
+    if (window.api.platform === 'win32') {
+      setInstallError(toolsResult.error || 'Failed to install required tools (Git). Please retry.')
+      setPhase('error')
+      return false
+    }
+    // Non-Windows: non-blocking
     setInstallSteps([
       { label: t('setup.toolsSkipped'), status: 'done' }
     ])

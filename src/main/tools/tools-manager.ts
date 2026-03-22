@@ -6,7 +6,8 @@ import {
   createWriteStream,
   unlinkSync,
   readFileSync,
-  chmodSync
+  chmodSync,
+  rmSync
 } from 'fs'
 import { execSync } from 'child_process'
 import { pipeline } from 'stream/promises'
@@ -102,6 +103,15 @@ export class ToolsManager {
     for (const def of required) {
       const binPath = this.getBinPath(def)
       if (binPath && !existsSync(binPath)) return false
+
+      // Also check extraEnv paths (e.g. git bash.exe for Windows)
+      const envDefs = def.extraEnv?.[this.platformKey]
+      if (envDefs) {
+        for (const val of Object.values(envDefs)) {
+          const absVal = join(this.toolsDir, val)
+          if (!existsSync(absVal)) return false
+        }
+      }
     }
     return true
   }
@@ -120,7 +130,15 @@ export class ToolsManager {
     const required = this.getRequiredTools()
     const missing = required.filter((def) => {
       const binPath = this.getBinPath(def)
-      return binPath && !existsSync(binPath)
+      if (binPath && !existsSync(binPath)) return true
+      // Check extraEnv paths (e.g. bash.exe for git)
+      const envDefs = def.extraEnv?.[this.platformKey]
+      if (envDefs) {
+        for (const val of Object.values(envDefs)) {
+          if (!existsSync(join(this.toolsDir, val))) return true
+        }
+      }
+      return false
     })
 
     if (missing.length === 0) {
@@ -234,12 +252,19 @@ export class ToolsManager {
       mkdirSync(extractDir, { recursive: true })
     }
 
+    // Remove old tool directory to avoid stale files (e.g. upgrading MinGit → PortableGit)
+    const oldToolDir = join(this.toolsDir, def.name)
+    if (existsSync(oldToolDir)) {
+      log.info(`Tools: removing old ${def.name} directory before extraction`)
+      rmSync(oldToolDir, { recursive: true, force: true })
+    }
+
     if (archiveExt === '.zip') {
       // Use system unzip (available on Windows via PowerShell and macOS)
       if (os.platform() === 'win32') {
         execSync(
           `powershell -NoProfile -Command "Expand-Archive -Force -Path '${tmpPath}' -DestinationPath '${extractDir}'"`,
-          { timeout: 120000 }
+          { timeout: 300000 }
         )
       } else {
         execSync(`unzip -o -q "${tmpPath}" -d "${extractDir}"`, {
@@ -260,6 +285,23 @@ export class ToolsManager {
       const binPath = this.getBinPath(def)
       if (binPath && existsSync(binPath)) {
         chmodSync(binPath, 0o755)
+      }
+    }
+
+    // Windows: run PortableGit post-install if present (initializes git config)
+    if (os.platform() === 'win32' && def.name === 'git') {
+      const postInstall = join(this.toolsDir, 'git', 'post-install.bat')
+      if (existsSync(postInstall)) {
+        try {
+          execSync(`"${postInstall}"`, {
+            cwd: join(this.toolsDir, 'git'),
+            timeout: 30000,
+            windowsHide: true
+          })
+          log.info('Tools: git post-install completed')
+        } catch {
+          log.warn('Tools: git post-install failed (non-fatal)')
+        }
       }
     }
 
@@ -295,21 +337,44 @@ export class ToolsManager {
   }
 
   /**
-   * Returns PATH-prepend entries for all installed tools.
-   * These directories should be prepended to PATH in PTY env.
+   * Returns PATH-prepend entries and extra env vars for all installed tools.
+   * These should be merged into PTY env.
    */
   getEnvPatch(): Record<string, string> {
     const dirs: string[] = []
+    const extraEnv: Record<string, string> = {}
+
     for (const def of this.getRequiredTools()) {
       const binPath = this.getBinPath(def)
       if (binPath && existsSync(binPath)) {
         dirs.push(dirname(binPath))
+
+        // Add extra PATH directories (e.g. git/bin for bash.exe)
+        const extraDirs = def.extraPathDirs?.[this.platformKey]
+        if (extraDirs) {
+          for (const rel of extraDirs) {
+            const absDir = join(this.toolsDir, rel)
+            if (existsSync(absDir)) {
+              dirs.push(absDir)
+            }
+          }
+        }
+
+        // Add extra environment variables (resolve relative paths)
+        const envDefs = def.extraEnv?.[this.platformKey]
+        if (envDefs) {
+          for (const [key, val] of Object.entries(envDefs)) {
+            const absVal = join(this.toolsDir, val)
+            extraEnv[key] = existsSync(absVal) ? absVal : val
+          }
+        }
       }
     }
-    if (dirs.length === 0) return {}
+    if (dirs.length === 0 && Object.keys(extraEnv).length === 0) return {}
 
     const currentPath = process.env.PATH || ''
     return {
+      ...extraEnv,
       PATH: dirs.join(delimiter) + delimiter + currentPath
     }
   }
