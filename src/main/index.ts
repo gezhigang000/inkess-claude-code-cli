@@ -137,6 +137,10 @@ ipcMain.handle('auth:getToken', () => {
   return authManager.getToken()
 })
 
+ipcMain.handle('auth:autoLogin', async () => {
+  return authManager.autoLogin()
+})
+
 // IPC: CLI Manager
 ipcMain.handle('cli:getInfo', () => {
   return cliManager.getInfo()

@@ -55,6 +55,7 @@ export class AuthManager {
   private dataDir: string
   private encFile: string
   private legacyFile: string
+  private credFile: string
   private authData: AuthData | null = null
   private useEncryption: boolean
   private balanceInFlight: Promise<{ balance: number; error?: string }> | null = null
@@ -63,6 +64,7 @@ export class AuthManager {
     this.dataDir = join(app.getPath('userData'), 'auth')
     this.encFile = join(this.dataDir, 'session.enc')
     this.legacyFile = join(this.dataDir, 'session.json')
+    this.credFile = join(this.dataDir, 'credentials.enc')
     this.useEncryption = safeStorage.isEncryptionAvailable()
     this.migrate()
     this.load()
@@ -135,6 +137,40 @@ export class AuthManager {
     try {
       if (existsSync(this.legacyFile)) unlinkSync(this.legacyFile)
     } catch { /* ignore */ }
+    this.clearCredentials()
+  }
+
+  private saveCredentials(login: string, password: string): void {
+    try {
+      if (!this.useEncryption) return
+      if (!existsSync(this.dataDir)) mkdirSync(this.dataDir, { recursive: true })
+      const json = JSON.stringify({ login, password })
+      const encrypted = safeStorage.encryptString(json)
+      const tmp = this.credFile + '.tmp'
+      writeFileSync(tmp, encrypted)
+      renameSync(tmp, this.credFile)
+    } catch (err) {
+      log.error('Auth: failed to save credentials', err)
+    }
+  }
+
+  private loadCredentials(): { login: string; password: string } | null {
+    try {
+      if (!this.useEncryption || !existsSync(this.credFile)) return null
+      const buffer = readFileSync(this.credFile)
+      const raw = safeStorage.decryptString(buffer)
+      const parsed = JSON.parse(raw)
+      if (typeof parsed?.login !== 'string' || typeof parsed?.password !== 'string') return null
+      return { login: parsed.login, password: parsed.password }
+    } catch {
+      return null
+    }
+  }
+
+  private clearCredentials(): void {
+    try {
+      if (existsSync(this.credFile)) unlinkSync(this.credFile)
+    } catch { /* ignore */ }
   }
 
   isLoggedIn(): boolean {
@@ -166,6 +202,7 @@ export class AuthManager {
       const data = await res.json() as { token: string; user: UserInfo }
       this.authData = { token: data.token, user: data.user }
       this.save()
+      this.saveCredentials(login, password)
       return { success: true }
     } catch (err) {
       return { success: false, error: catchErrorMessage(err) }
@@ -192,6 +229,7 @@ export class AuthManager {
       const data = await res.json() as { token: string; user: UserInfo }
       this.authData = { token: data.token, user: data.user }
       this.save()
+      this.saveCredentials(email, password)
       return { success: true }
     } catch (err) {
       return { success: false, error: catchErrorMessage(err) }
@@ -255,6 +293,10 @@ export class AuthManager {
         return { success: false, error: data.message || httpErrorMessage(res.status, 'Change password') }
       }
 
+      // Update saved credentials with new password
+      const creds = this.loadCredentials()
+      if (creds) this.saveCredentials(creds.login, newPassword)
+
       return { success: true }
     } catch (err) {
       return { success: false, error: catchErrorMessage(err) }
@@ -297,6 +339,44 @@ export class AuthManager {
 
   logout(): void {
     this.clear()
+  }
+
+  async autoLogin(): Promise<{ success: boolean; user: UserInfo | null }> {
+    const creds = this.loadCredentials()
+    if (!creds) return { success: false, user: null }
+
+    log.info('Auth: attempting auto-login with saved credentials')
+    try {
+      const res = await fetchWithTimeout(`${API_BASE}/api/llm/desktop/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ login: creds.login, password: creds.password })
+      })
+
+      if (!res.ok) {
+        // Only clear credentials on auth failures (wrong password / account disabled)
+        // Keep credentials on transient errors (5xx, 429) so next launch can retry
+        if (res.status === 401 || res.status === 403) {
+          log.info(`Auth: auto-login auth failed (${res.status}), clearing saved credentials`)
+          this.clearCredentials()
+        } else {
+          log.info(`Auth: auto-login failed (${res.status}), keeping credentials for retry`)
+        }
+        return { success: false, user: null }
+      }
+
+      const data = await res.json() as { token: string; user: UserInfo }
+      this.authData = { token: data.token, user: data.user }
+      this.save()
+      // Re-save credentials to keep them fresh (login identifier may have been normalized)
+      this.saveCredentials(creds.login, creds.password)
+      log.info('Auth: auto-login successful')
+      return { success: true, user: this.getUser() }
+    } catch (err) {
+      // Network error — keep credentials, user can retry next launch
+      log.info('Auth: auto-login network error, keeping credentials', (err as Error).message)
+      return { success: false, user: null }
+    }
   }
 
   getStatus(): { loggedIn: boolean; user: UserInfo | null } {

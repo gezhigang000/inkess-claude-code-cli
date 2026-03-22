@@ -61,6 +61,13 @@ export function App() {
       setAuth(authStatus.loggedIn, authStatus.user)
 
       if (!authStatus.loggedIn) {
+        // Try auto-login with saved credentials
+        const autoResult = await window.api.auth.autoLogin()
+        if (autoResult.success) {
+          setAuth(true, autoResult.user)
+          await checkCliAndProceed()
+          return
+        }
         setPhase('login')
         return
       }
