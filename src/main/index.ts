@@ -8,6 +8,7 @@ import { ToolsManager } from './tools/tools-manager'
 import { AuthManager } from './auth/auth-manager'
 import { checkForAppUpdate, downloadAppUpdate, installAppUpdate, onUpdateStatus } from './updater'
 import { Analytics } from './analytics'
+import { mkdirSync } from 'fs'
 
 process.on('uncaughtException', (err) => log.error('Uncaught:', err))
 process.on('unhandledRejection', (reason) => log.error('Unhandled:', reason))
@@ -217,8 +218,11 @@ ipcMain.handle('pty:create', (_event, options: {
     }
 
     // Merge tools PATH into env so PTY can find bundled python/git
+    // Isolate Claude Code config to avoid reading/writing user's ~/.claude/settings.json
     const toolsEnv = toolsManager.getEnvPatch()
-    const mergedEnv = { ...toolsEnv, ...options.env }
+    const claudeConfigDir = join(app.getPath('userData'), 'claude-config')
+    mkdirSync(claudeConfigDir, { recursive: true })
+    const mergedEnv = { ...toolsEnv, ...options.env, CLAUDE_CONFIG_DIR: claudeConfigDir }
 
     const id = ptyManager.create(options.cwd, mergedEnv, command, args)
     ptyMonitor.watch(id)

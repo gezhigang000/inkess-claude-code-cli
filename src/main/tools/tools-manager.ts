@@ -100,18 +100,27 @@ export class ToolsManager {
   /** Check if all required tools are installed */
   isAllInstalled(): boolean {
     const required = this.getRequiredTools()
+    const missing: string[] = []
     for (const def of required) {
       const binPath = this.getBinPath(def)
-      if (binPath && !existsSync(binPath)) return false
+      if (binPath && !existsSync(binPath)) {
+        missing.push(`${def.name}: bin not found at ${binPath}`)
+      }
 
       // Also check extraEnv paths (e.g. git bash.exe for Windows)
       const envDefs = def.extraEnv?.[this.platformKey]
       if (envDefs) {
-        for (const val of Object.values(envDefs)) {
+        for (const [key, val] of Object.entries(envDefs)) {
           const absVal = join(this.toolsDir, val)
-          if (!existsSync(absVal)) return false
+          if (!existsSync(absVal)) {
+            missing.push(`${def.name}: extraEnv ${key} not found at ${absVal}`)
+          }
         }
       }
+    }
+    if (missing.length > 0) {
+      log.info(`Tools: missing files:\n  ${missing.join('\n  ')}`)
+      return false
     }
     return true
   }
