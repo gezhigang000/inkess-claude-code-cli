@@ -88,6 +88,12 @@ export const en = {
   'settings.languageHint': 'Choose the display language for the app',
   'settings.about': 'About',
   'settings.version': 'Version',
+  'settings.diagnostics': 'Diagnostics',
+  'settings.diagnosticsHint': 'Upload logs to help troubleshoot issues',
+  'settings.uploadLogs': 'Upload Logs',
+  'settings.uploadingLogs': 'Uploading...',
+  'settings.logsUploaded': 'Uploaded',
+  'settings.logsUploadFailed': 'Upload Failed',
 
   // Welcome
   'welcome.openFolder': 'Open Working Directory',

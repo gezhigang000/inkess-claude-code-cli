@@ -90,6 +90,12 @@ export const zh: Record<TranslationKey, string> = {
   'settings.languageHint': '选择应用的显示语言',
   'settings.about': '关于',
   'settings.version': '版本',
+  'settings.diagnostics': '诊断',
+  'settings.diagnosticsHint': '上传运行日志帮助排查问题',
+  'settings.uploadLogs': '上传日志',
+  'settings.uploadingLogs': '上传中...',
+  'settings.logsUploaded': '上传成功',
+  'settings.logsUploadFailed': '上传失败',
 
   // Welcome
   'welcome.openFolder': '打开工作目录',

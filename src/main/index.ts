@@ -8,6 +8,7 @@ import { ToolsManager } from './tools/tools-manager'
 import { AuthManager } from './auth/auth-manager'
 import { checkForAppUpdate, downloadAppUpdate, installAppUpdate, onUpdateStatus } from './updater'
 import { Analytics } from './analytics'
+import { ErrorReporter } from './error-reporter'
 import { mkdirSync } from 'fs'
 
 process.on('uncaughtException', (err) => log.error('Uncaught:', err))
@@ -20,7 +21,11 @@ const cliManager = new CliManager()
 const toolsManager = new ToolsManager()
 const authManager = new AuthManager()
 const analytics = new Analytics()
+const errorReporter = new ErrorReporter()
 analytics.setTokenGetter(() => {
+  try { return authManager.getToken() } catch { return null }
+})
+errorReporter.setTokenGetter(() => {
   try { return authManager.getToken() } catch { return null }
 })
 
@@ -285,7 +290,11 @@ ipcMain.handle('shell:selectDirectory', async () => {
 // IPC: Renderer error reporting
 ipcMain.on('log:error', (_event, { message, stack }: { message: string; stack?: string }) => {
   log.error(`[Renderer] ${message}`, stack || '')
+  errorReporter.report(message, stack, 'renderer')
 })
+
+// IPC: Log upload
+ipcMain.handle('logs:uploadFile', () => errorReporter.uploadLogFile())
 
 // IPC: App auto-update
 ipcMain.handle('appUpdate:check', () => checkForAppUpdate())
@@ -419,6 +428,7 @@ app.on('window-all-closed', () => {
   ptyManager.killAll()
   ptyMonitor.dispose()
   analytics.flushSync()
+  errorReporter.flushSync()
   if (sleepBlockerId !== null) {
     powerSaveBlocker.stop(sleepBlockerId)
     sleepBlockerId = null

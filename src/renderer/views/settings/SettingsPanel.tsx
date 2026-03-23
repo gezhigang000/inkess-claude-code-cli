@@ -323,11 +323,23 @@ function AboutSection() {
   const { t } = useI18n()
   const [appVersion, setAppVersion] = useState('')
   const [cliVersion, setCliVersion] = useState<string | null>(null)
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle')
 
   useEffect(() => {
     window.api.app.getVersion().then(setAppVersion)
     window.api.cli.getInfo().then(info => setCliVersion(info.version))
   }, [])
+
+  const handleUploadLogs = async () => {
+    setUploadStatus('uploading')
+    try {
+      const result = await window.api.log.uploadFile()
+      setUploadStatus(result.success ? 'success' : 'error')
+    } catch {
+      setUploadStatus('error')
+    }
+    setTimeout(() => setUploadStatus('idle'), 3000)
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -342,6 +354,23 @@ function AboutSection() {
             <span style={{ fontSize: 13, color: 'var(--text-primary)', fontFamily: 'var(--font-mono, monospace)' }}>{cliVersion ? `v${cliVersion}` : '—'}</span>
           </div>
         </div>
+      </SettingsGroup>
+      <SettingsGroup title={t('settings.diagnostics')}>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>{t('settings.diagnosticsHint')}</div>
+        <button
+          onClick={handleUploadLogs}
+          disabled={uploadStatus === 'uploading'}
+          style={{
+            padding: '6px 14px', background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
+            border: '1px solid var(--border)', borderRadius: 6, fontSize: 12,
+            ...(uploadStatus === 'uploading' ? disabledBtnBase : { cursor: 'pointer' }),
+          }}
+        >
+          {uploadStatus === 'uploading' ? t('settings.uploadingLogs') :
+           uploadStatus === 'success' ? t('settings.logsUploaded') :
+           uploadStatus === 'error' ? t('settings.logsUploadFailed') :
+           t('settings.uploadLogs')}
+        </button>
       </SettingsGroup>
     </div>
   )
