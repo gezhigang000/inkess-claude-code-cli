@@ -47,7 +47,22 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           ))}
         </div>
 
-        {error && <div style={{ fontSize: 13, color: 'var(--error-text)', marginBottom: 12, textAlign: 'center' }}>{error}</div>}
+        {error && (
+          <div style={{ fontSize: 13, color: 'var(--error-text)', marginBottom: 12, textAlign: 'center' }}>
+            {error}
+            {error.includes('token is disabled') && (
+              <div style={{ marginTop: 8 }}>
+                <a
+                  href="#"
+                  onClick={(e) => { e.preventDefault(); window.api.shell.openExternal('https://llm.starapp.net/zh/console/tokens') }}
+                  style={{ color: 'var(--accent)', textDecoration: 'underline', cursor: 'pointer', fontSize: 12 }}
+                >
+                  Go to Console → Tokens
+                </a>
+              </div>
+            )}
+          </div>
+        )}
         {success && <div style={{ fontSize: 13, color: 'var(--success)', marginBottom: 12, textAlign: 'center' }}>{success}</div>}
 
         {tab === 'login' ? (

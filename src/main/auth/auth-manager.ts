@@ -195,7 +195,10 @@ export class AuthManager {
       })
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({})) as { message?: string }
+        const data = await res.json().catch(() => ({})) as { message?: string; errorCode?: string }
+        if (data.errorCode === 'desktop_token_disabled') {
+          return { success: false, error: 'System token is disabled. Please enable it at llm.starapp.net → Console → Tokens' }
+        }
         return { success: false, error: data.message || httpErrorMessage(res.status, 'Login') }
       }
 
@@ -356,9 +359,19 @@ export class AuthManager {
       if (!res.ok) {
         // Only clear credentials on auth failures (wrong password / account disabled)
         // Keep credentials on transient errors (5xx, 429) so next launch can retry
-        if (res.status === 401 || res.status === 403) {
+        if (res.status === 401) {
           log.info(`Auth: auto-login auth failed (${res.status}), clearing saved credentials`)
           this.clearCredentials()
+        } else if (res.status === 403) {
+          const data = await res.json().catch(() => ({})) as { errorCode?: string }
+          if (data.errorCode === 'desktop_token_disabled') {
+            // Token disabled by user — keep credentials, show login screen
+            log.info('Auth: auto-login failed — desktop token disabled by user')
+          } else {
+            // Account disabled — clear credentials
+            log.info(`Auth: auto-login auth failed (403), clearing saved credentials`)
+            this.clearCredentials()
+          }
         } else {
           log.info(`Auth: auto-login failed (${res.status}), keeping credentials for retry`)
         }
