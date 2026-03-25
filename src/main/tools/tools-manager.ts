@@ -5,6 +5,7 @@ import {
   mkdirSync,
   createWriteStream,
   unlinkSync,
+  renameSync,
   readFileSync,
   chmodSync,
   rmSync
@@ -271,23 +272,30 @@ export class ToolsManager {
     if (archiveExt === '.zip') {
       // Use system unzip (available on Windows via PowerShell and macOS)
       if (os.platform() === 'win32') {
-        execSync(
-          `powershell -NoProfile -Command "Expand-Archive -Force -Path '${tmpPath}' -DestinationPath '${extractDir}'"`,
-          { timeout: 300000 }
-        )
+        // PowerShell Expand-Archive only accepts .zip extension — rename first
+        const zipPath = tmpPath.replace(/\.tmp$/, '')
+        renameSync(tmpPath, zipPath)
+        try {
+          execSync(
+            `powershell -NoProfile -Command "Expand-Archive -Force -Path '${zipPath}' -DestinationPath '${extractDir}'"`,
+            { timeout: 300000 }
+          )
+        } finally {
+          if (existsSync(zipPath)) unlinkSync(zipPath)
+        }
       } else {
         execSync(`unzip -o -q "${tmpPath}" -d "${extractDir}"`, {
           timeout: 120000
         })
+        unlinkSync(tmpPath)
       }
     } else {
       // tar.gz
       execSync(`tar -xzf "${tmpPath}" -C "${extractDir}"`, {
         timeout: 120000
       })
+      unlinkSync(tmpPath)
     }
-
-    unlinkSync(tmpPath)
 
     // Set executable permission on unix
     if (os.platform() !== 'win32') {
