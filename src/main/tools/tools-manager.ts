@@ -316,8 +316,8 @@ export class ToolsManager {
             windowsHide: true
           })
           log.info('Tools: git post-install completed')
-        } catch {
-          log.warn('Tools: git post-install failed (non-fatal)')
+        } catch (err) {
+          log.warn('Tools: git post-install failed (non-fatal):', err)
         }
       }
     }
@@ -339,11 +339,18 @@ export class ToolsManager {
     if (binPath) {
       try {
         execSync(`"${binPath}" ${def.verifyCommand.join(' ')}`, {
-          timeout: 10000
+          timeout: 10000,
+          cwd: join(this.toolsDir, def.name)
         })
         log.info(`Tools: ${def.name} verified successfully`)
       } catch (err) {
         log.error(`Tools: ${def.name} verification failed:`, err)
+        // Clean up broken installation so next launch triggers a fresh install
+        const toolDir = join(this.toolsDir, def.name)
+        if (existsSync(toolDir)) {
+          log.info(`Tools: removing broken ${def.name} directory for re-install`)
+          rmSync(toolDir, { recursive: true, force: true })
+        }
         throw new Error(
           `${def.displayName} installation verification failed. Please try again.`
         )
