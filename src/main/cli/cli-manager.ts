@@ -7,6 +7,7 @@ import {
   createWriteStream,
   unlinkSync,
   readFileSync,
+  writeFileSync,
   renameSync,
   copyFileSync
 } from 'fs'
@@ -38,13 +39,27 @@ interface CliInfo {
 function fetchWithTimeout(
   url: string,
   options: RequestInit = {},
-  timeout = 15000
+  timeout = 15000,
+  retries = 2
 ): Promise<Response> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeout)
-  return fetch(url, { ...options, signal: controller.signal }).finally(() =>
-    clearTimeout(timer)
-  )
+  const attempt = async (): Promise<Response> => {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeout)
+    return fetch(url, { ...options, signal: controller.signal }).finally(() =>
+      clearTimeout(timer)
+    )
+  }
+  let lastErr: unknown
+  const run = async (): Promise<Response> => {
+    for (let i = 0; i <= retries; i++) {
+      try { return await attempt() } catch (err) {
+        lastErr = err
+        if (i < retries) await new Promise(r => setTimeout(r, 1500 * (i + 1)))
+      }
+    }
+    throw lastErr
+  }
+  return run()
 }
 
 function sha256File(filePath: string): string {
@@ -57,6 +72,10 @@ export class CliManager {
   private binaryPath: string
   private _cachedInfo: CliInfo | null = null
 
+  private get markerPath(): string {
+    return join(this.cliDir, '.installed')
+  }
+
   constructor() {
     this.cliDir = join(app.getPath('userData'), 'cli')
     const binaryName = os.platform() === 'win32' ? 'claude.exe' : 'claude'
@@ -65,6 +84,12 @@ export class CliManager {
 
   getInfo(): CliInfo {
     if (this._cachedInfo) return this._cachedInfo
+    // Fast path: if marker exists, skip execSync version check
+    if (existsSync(this.markerPath) && existsSync(this.binaryPath)) {
+      const info = { installed: true, path: this.binaryPath, version: null }
+      this._cachedInfo = info
+      return info
+    }
     const installed = existsSync(this.binaryPath)
     let version: string | null = null
     if (installed) {
@@ -261,6 +286,7 @@ export class CliManager {
 
     onProgress?.('Installation complete', 1.0)
     this.invalidateCache()
+    writeFileSync(this.markerPath, new Date().toISOString())
   }
 
   async update(

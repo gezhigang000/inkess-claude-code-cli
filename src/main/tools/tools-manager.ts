@@ -7,6 +7,7 @@ import {
   unlinkSync,
   renameSync,
   readFileSync,
+  writeFileSync,
   chmodSync,
   rmSync
 } from 'fs'
@@ -35,13 +36,27 @@ export type ToolsInfo = Record<ToolName, ToolStatus>
 function fetchWithTimeout(
   url: string,
   options: RequestInit = {},
-  timeout = 15000
+  timeout = 15000,
+  retries = 2
 ): Promise<Response> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeout)
-  return fetch(url, { ...options, signal: controller.signal }).finally(() =>
-    clearTimeout(timer)
-  )
+  const attempt = (): Promise<Response> => {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeout)
+    return fetch(url, { ...options, signal: controller.signal }).finally(() =>
+      clearTimeout(timer)
+    )
+  }
+  const run = async (): Promise<Response> => {
+    let lastErr: unknown
+    for (let i = 0; i <= retries; i++) {
+      try { return await attempt() } catch (err) {
+        lastErr = err
+        if (i < retries) await new Promise(r => setTimeout(r, 1500 * (i + 1)))
+      }
+    }
+    throw lastErr
+  }
+  return run()
 }
 
 function sha256File(filePath: string): string {
@@ -53,6 +68,10 @@ export class ToolsManager {
   private toolsDir: string
   private platformKey: string
   private _cachedInfo: ToolsInfo | null = null
+
+  private get markerPath(): string {
+    return join(this.toolsDir, '.installed')
+  }
 
   constructor() {
     this.toolsDir = join(app.getPath('userData'), 'tools')
@@ -109,6 +128,9 @@ export class ToolsManager {
 
   /** Check if all required tools are installed */
   isAllInstalled(): boolean {
+    // Fast path: marker file written after successful install
+    if (existsSync(this.markerPath)) return true
+
     const required = this.getRequiredTools()
     const missing: string[] = []
     for (const def of required) {
@@ -206,6 +228,8 @@ export class ToolsManager {
 
     onProgress?.('Development tools ready', 1.0)
     this.invalidateCache()
+    // Write marker so subsequent launches skip the install check
+    writeFileSync(this.markerPath, new Date().toISOString())
   }
 
   private async installTool(
