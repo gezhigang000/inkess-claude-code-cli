@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { ClipboardAddon } from '@xterm/addon-clipboard'
 import { useSettingsStore } from '../../stores/settings'
 
 interface TerminalViewProps {
@@ -60,7 +61,9 @@ export function TerminalView({ ptyId, isActive }: TerminalViewProps) {
     })
 
     const fitAddon = new FitAddon()
+    const clipboardAddon = new ClipboardAddon()
     term.loadAddon(fitAddon)
+    term.loadAddon(clipboardAddon)
 
     term.open(containerRef.current)
 

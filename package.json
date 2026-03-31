@@ -1,6 +1,6 @@
 {
   "name": "inkess-claude-code-cli",
-  "version": "0.3.11",
+  "version": "0.3.13",
   "description": "Inkess Claude Code CLI — Zero-config Claude Code terminal for Inkess users",
   "author": "Inkess",
   "main": "./out/main/index.js",
@@ -99,6 +99,7 @@
     "vitest": "^4.1.0"
   },
   "dependencies": {
+    "@xterm/addon-clipboard": "^0.2.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "electron-log": "^5.4.3",

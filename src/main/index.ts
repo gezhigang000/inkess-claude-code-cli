@@ -400,6 +400,15 @@ app.whenReady().then(() => {
     })
   }
 
+  // Allow clipboard read/write for @xterm/addon-clipboard (navigator.clipboard)
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    if (permission === 'clipboard-read' || permission === 'clipboard-sanitized-write') {
+      callback(true)
+    } else {
+      callback(false)
+    }
+  })
+
   createWindow()
   setupMenu()
 
