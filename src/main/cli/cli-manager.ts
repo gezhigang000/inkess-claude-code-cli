@@ -55,6 +55,7 @@ function sha256File(filePath: string): string {
 export class CliManager {
   private cliDir: string
   private binaryPath: string
+  private _cachedInfo: CliInfo | null = null
 
   constructor() {
     this.cliDir = join(app.getPath('userData'), 'cli')
@@ -63,6 +64,7 @@ export class CliManager {
   }
 
   getInfo(): CliInfo {
+    if (this._cachedInfo) return this._cachedInfo
     const installed = existsSync(this.binaryPath)
     let version: string | null = null
     if (installed) {
@@ -78,7 +80,13 @@ export class CliManager {
         // binary exists but can't get version
       }
     }
-    return { installed, path: this.binaryPath, version }
+    const info = { installed, path: this.binaryPath, version }
+    if (installed) this._cachedInfo = info
+    return info
+  }
+
+  invalidateCache(): void {
+    this._cachedInfo = null
   }
 
   getBinaryPath(): string {
@@ -252,6 +260,7 @@ export class CliManager {
     }
 
     onProgress?.('Installation complete', 1.0)
+    this.invalidateCache()
   }
 
   async update(

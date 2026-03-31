@@ -52,6 +52,7 @@ function sha256File(filePath: string): string {
 export class ToolsManager {
   private toolsDir: string
   private platformKey: string
+  private _cachedInfo: ToolsInfo | null = null
 
   constructor() {
     this.toolsDir = join(app.getPath('userData'), 'tools')
@@ -72,6 +73,7 @@ export class ToolsManager {
 
   /** Check status of all tools for this platform */
   getInfo(): ToolsInfo {
+    if (this._cachedInfo) return this._cachedInfo
     const info: Partial<ToolsInfo> = {}
     for (const def of TOOL_DEFINITIONS) {
       const binPath = this.getBinPath(def)
@@ -95,7 +97,14 @@ export class ToolsManager {
       }
       info[def.name] = { installed, path: binPath, version }
     }
-    return info as ToolsInfo
+    const result = info as ToolsInfo
+    const allInstalled = Object.values(result).every(s => s.installed)
+    if (allInstalled) this._cachedInfo = result
+    return result
+  }
+
+  invalidateCache(): void {
+    this._cachedInfo = null
   }
 
   /** Check if all required tools are installed */
@@ -196,6 +205,7 @@ export class ToolsManager {
     }
 
     onProgress?.('Development tools ready', 1.0)
+    this.invalidateCache()
   }
 
   private async installTool(

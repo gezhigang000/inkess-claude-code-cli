@@ -306,6 +306,14 @@ ipcMain.handle('clipboard:writeText', (_event, text: string) => {
   clipboard.writeText(text)
 })
 
+// IPC: Window controls (Windows only)
+ipcMain.on('window:minimize', () => mainWindow?.minimize())
+ipcMain.on('window:maximize', () => {
+  if (mainWindow?.isMaximized()) mainWindow.unmaximize()
+  else mainWindow?.maximize()
+})
+ipcMain.on('window:close', () => mainWindow?.close())
+
 // IPC: App version
 ipcMain.handle('app:getVersion', () => {
   return app.getVersion()

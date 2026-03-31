@@ -161,6 +161,12 @@ const api = {
     writeText: (text: string) => ipcRenderer.invoke('clipboard:writeText', text)
   },
 
+  window: {
+    minimize: () => ipcRenderer.send('window:minimize'),
+    maximize: () => ipcRenderer.send('window:maximize'),
+    close: () => ipcRenderer.send('window:close'),
+  },
+
   app: {
     getVersion: () => ipcRenderer.invoke('app:getVersion') as Promise<string>,
     isFocused: () => ipcRenderer.invoke('app:isFocused') as Promise<boolean>

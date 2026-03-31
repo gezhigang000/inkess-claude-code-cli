@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
-import { ClipboardAddon } from '@xterm/addon-clipboard'
 import { useSettingsStore } from '../../stores/settings'
 
 interface TerminalViewProps {
@@ -61,9 +60,7 @@ export function TerminalView({ ptyId, isActive }: TerminalViewProps) {
     })
 
     const fitAddon = new FitAddon()
-    const clipboardAddon = new ClipboardAddon()
     term.loadAddon(fitAddon)
-    term.loadAddon(clipboardAddon)
 
     term.open(containerRef.current)
 
@@ -84,6 +81,27 @@ export function TerminalView({ ptyId, isActive }: TerminalViewProps) {
       }
     })
     resizeObserver.observe(container)
+
+    // Copy: Ctrl+C (Win/Linux) or Cmd+C (Mac) when text is selected
+    // Paste: Ctrl+V (Win/Linux) or Cmd+V (Mac)
+    term.attachCustomKeyEventHandler((event) => {
+      const modifier = navigator.platform.includes('Mac') ? event.metaKey : event.ctrlKey
+      if (!modifier) return true
+
+      if (event.type === 'keydown' && event.key === 'c' && term.hasSelection()) {
+        navigator.clipboard.writeText(term.getSelection())
+        return false
+      }
+
+      if (event.type === 'keydown' && event.key === 'v') {
+        navigator.clipboard.readText().then(text => {
+          if (ptyId && text) window.api.pty.write(ptyId, text)
+        })
+        return false
+      }
+
+      return true
+    })
 
     // PTY data → terminal
     const removeDataListener = window.api.pty.onData(({ id, data }) => {
