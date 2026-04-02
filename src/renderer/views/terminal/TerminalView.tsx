@@ -1,11 +1,63 @@
 import { useEffect, useRef } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
-import { useSettingsStore } from '../../stores/settings'
+import { useSettingsStore, resolveTheme } from '../../stores/settings'
 
 interface TerminalViewProps {
   ptyId: string | null
   isActive: boolean
+}
+
+const DARK_THEME = {
+  background: '#191919',
+  foreground: '#F0EDE8',
+  cursor: '#C9A87C',
+  cursorAccent: '#191919',
+  selectionBackground: 'rgba(201, 168, 124, 0.3)',
+  black: '#191919',
+  red: '#FC8181',
+  green: '#68D391',
+  yellow: '#ECC94B',
+  blue: '#7AA2F7',
+  magenta: '#BB9AF7',
+  cyan: '#7DCFFF',
+  white: '#F0EDE8',
+  brightBlack: '#6B6B6B',
+  brightRed: '#FC8181',
+  brightGreen: '#68D391',
+  brightYellow: '#ECC94B',
+  brightBlue: '#7AA2F7',
+  brightMagenta: '#BB9AF7',
+  brightCyan: '#7DCFFF',
+  brightWhite: '#FFFFFF'
+}
+
+const LIGHT_THEME = {
+  background: '#FAFAF8',
+  foreground: '#1A1A1A',
+  cursor: '#7A6244',
+  cursorAccent: '#FAFAF8',
+  selectionBackground: 'rgba(122, 98, 68, 0.2)',
+  black: '#1A1A1A',
+  red: '#C53030',
+  green: '#2E8B57',
+  yellow: '#B8860B',
+  blue: '#2563EB',
+  magenta: '#7C3AED',
+  cyan: '#0891B2',
+  white: '#F0EDE8',
+  brightBlack: '#999999',
+  brightRed: '#E53E3E',
+  brightGreen: '#38A169',
+  brightYellow: '#D69E2E',
+  brightBlue: '#3B82F6',
+  brightMagenta: '#8B5CF6',
+  brightCyan: '#06B6D4',
+  brightWhite: '#FFFFFF'
+}
+
+function getTerminalTheme(): typeof DARK_THEME {
+  return resolveTheme(useSettingsStore.getState().theme) === 'light' ? LIGHT_THEME : DARK_THEME
 }
 
 function safeFit(container: HTMLDivElement | null, fitAddon: FitAddon | null) {
@@ -23,34 +75,13 @@ export function TerminalView({ ptyId, isActive }: TerminalViewProps) {
   const termRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
   const fontSize = useSettingsStore((s) => s.fontSize)
+  const theme = useSettingsStore((s) => s.theme)
 
   useEffect(() => {
     if (!containerRef.current) return
 
     const term = new Terminal({
-      theme: {
-        background: '#191919',
-        foreground: '#F0EDE8',
-        cursor: '#8B7355',
-        cursorAccent: '#191919',
-        selectionBackground: 'rgba(139, 115, 85, 0.3)',
-        black: '#191919',
-        red: '#FC8181',
-        green: '#68D391',
-        yellow: '#ECC94B',
-        blue: '#7AA2F7',
-        magenta: '#BB9AF7',
-        cyan: '#7DCFFF',
-        white: '#F0EDE8',
-        brightBlack: '#6B6B6B',
-        brightRed: '#FC8181',
-        brightGreen: '#68D391',
-        brightYellow: '#ECC94B',
-        brightBlue: '#7AA2F7',
-        brightMagenta: '#BB9AF7',
-        brightCyan: '#7DCFFF',
-        brightWhite: '#FFFFFF'
-      },
+      theme: getTerminalTheme(),
       fontFamily: '"JetBrains Mono", "Geist Mono", monospace',
       fontSize: useSettingsStore.getState().fontSize,
       lineHeight: 1.5,
@@ -124,6 +155,13 @@ export function TerminalView({ ptyId, isActive }: TerminalViewProps) {
       term.dispose()
     }
   }, [ptyId])
+
+  // React to theme changes
+  useEffect(() => {
+    if (termRef.current) {
+      termRef.current.options.theme = getTerminalTheme()
+    }
+  }, [theme])
 
   // React to fontSize changes from settings
   useEffect(() => {

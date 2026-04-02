@@ -114,10 +114,14 @@ export const en = {
   'sidebar.sessions': 'Sessions',
   'sidebar.active': 'Active',
   'sidebar.recent': 'Recent',
+  'sidebar.justNow': 'just now',
   'sidebar.yesterday': 'yesterday',
   'sidebar.newSession': 'New Session',
   'sidebar.commands': 'Commands',
   'sidebar.projects': 'Projects',
+  'sidebar.collapse': 'Collapse Sidebar',
+  'sidebar.expand': 'Expand Sidebar',
+  'sidebar.deleteSession': 'Remove from history',
 
   // StatusBar
   'statusbar.preventingSleep': 'Preventing sleep',

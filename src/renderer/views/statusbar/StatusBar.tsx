@@ -148,16 +148,22 @@ export function StatusBar() {
       <div style={{ flex: 1 }} />
 
       {/* Mode switcher with flash feedback */}
-      <div style={{ display: 'flex', height: 18, borderRadius: 4, overflow: 'hidden', border: '1px solid var(--border)' }}>
+      <div style={{
+        display: 'flex', height: 18, borderRadius: 4, overflow: 'hidden', border: '1px solid var(--border)',
+        opacity: activeTab?.isRunning ? 0.4 : 1,
+        transition: 'opacity 0.2s',
+      }}>
         {MODES.map((mode) => {
           const isActive = currentMode === mode
           const isFlashing = modeFlash === mode
+          const isDisabled = !activeTab?.ptyId || activeTab?.isRunning
           return (
             <div
               key={mode}
               onClick={() => handleModeClick(mode)}
               style={{
-                padding: '0 8px', fontSize: 11, lineHeight: '18px', cursor: 'pointer',
+                padding: '0 8px', fontSize: 11, lineHeight: '18px',
+                cursor: isDisabled ? 'not-allowed' : 'pointer',
                 background: isFlashing ? 'var(--accent-hover)' : isActive ? 'var(--accent)' : 'transparent',
                 color: isActive ? '#fff' : 'var(--text-muted)',
                 transition: 'background 0.2s, color 0.2s',
@@ -170,9 +176,15 @@ export function StatusBar() {
         })}
       </div>
 
-      {/* Balance — simplified */}
-      <div title={`${t('app.balance')}: ¥${(balance / 100).toFixed(2)}`}>
-        ¥{(balance / 100).toFixed(2)}
+      {/* Balance — with low balance warning */}
+      <div
+        title={`${t('app.balance')}: ¥${(balance / 100).toFixed(2)}`}
+        style={{
+          color: balance < 100 ? 'var(--error-text)' : balance < 500 ? 'var(--warning-text)' : undefined,
+          fontWeight: balance < 100 ? 600 : undefined,
+        }}
+      >
+        {balance < 100 && '⚠ '}¥{(balance / 100).toFixed(2)}
       </div>
     </div>
   )

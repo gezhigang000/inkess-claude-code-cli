@@ -116,10 +116,14 @@ export const zh: Record<TranslationKey, string> = {
   'sidebar.sessions': '会话',
   'sidebar.active': '活跃',
   'sidebar.recent': '最近',
+  'sidebar.justNow': '刚刚',
   'sidebar.yesterday': '昨天',
   'sidebar.newSession': '新建会话',
   'sidebar.commands': '命令',
   'sidebar.projects': '项目',
+  'sidebar.collapse': '折叠侧边栏',
+  'sidebar.expand': '展开侧边栏',
+  'sidebar.deleteSession': '从历史中移除',
 
   // StatusBar
   'statusbar.preventingSleep': '阻止休眠中',

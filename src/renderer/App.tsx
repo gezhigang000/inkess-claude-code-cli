@@ -232,13 +232,39 @@ export function App() {
     return () => { unsub() }
   }, [])
 
-  // Global keyboard shortcuts: Cmd+K (command palette), Shift+Tab (mode cycle)
+  // Global keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey
+
       // Cmd+K / Ctrl+K → toggle command palette
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      if (mod && e.key === 'k') {
         e.preventDefault()
         setShowCommandPalette(prev => !prev)
+      }
+      // Cmd+T / Ctrl+T → new tab
+      if (mod && e.key === 't' && !e.shiftKey) {
+        e.preventDefault()
+        handleSelectDirectory()
+      }
+      // Cmd+, / Ctrl+, → settings
+      if (mod && e.key === ',') {
+        e.preventDefault()
+        setShowSettings(true)
+      }
+      // Cmd+M / Ctrl+M → /model command
+      if (mod && e.key === 'm' && !e.shiftKey) {
+        e.preventDefault()
+        const store = useTerminalStore.getState()
+        const tab = store.tabs.find(t => t.id === store.activeTabId)
+        if (tab?.ptyId) window.api.pty.write(tab.ptyId, '/model\n')
+      }
+      // Cmd+Shift+C / Ctrl+Shift+C → /compact command
+      if (mod && e.shiftKey && e.key === 'C') {
+        e.preventDefault()
+        const store = useTerminalStore.getState()
+        const tab = store.tabs.find(t => t.id === store.activeTabId)
+        if (tab?.ptyId) window.api.pty.write(tab.ptyId, '/compact\n')
       }
       // Shift+Tab → cycle mode (only when not typing in terminal)
       if (e.shiftKey && e.key === 'Tab' && !e.metaKey && !e.ctrlKey) {
@@ -259,7 +285,7 @@ export function App() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [])
+  }, [handleSelectDirectory])
 
   // Listen for system theme changes (for 'auto' mode)
   useEffect(() => {
