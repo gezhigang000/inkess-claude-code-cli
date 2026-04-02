@@ -101,6 +101,25 @@ const api = {
     }
   },
 
+  session: {
+    list: () => ipcRenderer.invoke('session:list') as Promise<Array<{
+      id: string; ptyId: string; cwd: string; title: string
+      createdAt: number; closedAt?: number; size: number
+    }>>,
+    read: (id: string) => ipcRenderer.invoke('session:read', id) as Promise<Array<{
+      t: number; d: string; s?: string
+    }>>,
+    delete: (id: string) => ipcRenderer.invoke('session:delete', id) as Promise<void>,
+    clearAll: () => ipcRenderer.invoke('session:clearAll') as Promise<void>,
+    search: (query: string) => ipcRenderer.invoke('session:search', query) as Promise<Array<{
+      id: string; matches: number
+    }>>,
+  },
+
+  fs: {
+    isDirectory: (path: string) => ipcRenderer.invoke('fs:isDirectory', path) as Promise<boolean>,
+  },
+
   shell: {
     openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
     openPath: (path: string) => ipcRenderer.invoke('shell:openPath', path),
@@ -158,7 +177,8 @@ const api = {
   },
 
   clipboard: {
-    writeText: (text: string) => ipcRenderer.invoke('clipboard:writeText', text)
+    writeText: (text: string) => ipcRenderer.invoke('clipboard:writeText', text),
+    saveImage: (buffer: ArrayBuffer) => ipcRenderer.invoke('clipboard:saveImage', buffer) as Promise<string>,
   },
 
   window: {

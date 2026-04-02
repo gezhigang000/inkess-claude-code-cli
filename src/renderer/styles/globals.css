@@ -108,6 +108,18 @@ button:not(.xterm *):active, [role="button"]:not(.xterm *):active {
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
+/* Spin animation (loading spinners) */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Slide-down animation (image confirm bar) */
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* Fade-in animation (session items, command palette backdrop) */
 @keyframes fadeIn {
   from { opacity: 0; }

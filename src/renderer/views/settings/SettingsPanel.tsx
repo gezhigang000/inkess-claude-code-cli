@@ -355,6 +355,7 @@ function AboutSection() {
           </div>
         </div>
       </SettingsGroup>
+      <ClearHistorySection />
       <SettingsGroup title={t('settings.diagnostics')}>
         <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>{t('settings.diagnosticsHint')}</div>
         <button
@@ -373,6 +374,49 @@ function AboutSection() {
         </button>
       </SettingsGroup>
     </div>
+  )
+}
+
+function ClearHistorySection() {
+  const { t } = useI18n()
+  const [confirming, setConfirming] = useState(false)
+
+  return (
+    <SettingsGroup title={t('history.title')}>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>{t('history.clearConfirm')}</div>
+      {confirming ? (
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={async () => { await window.api.session.clearAll(); setConfirming(false) }}
+            style={{
+              padding: '6px 14px', background: 'var(--error)', color: '#fff',
+              border: 'none', borderRadius: 6, fontSize: 12, cursor: 'pointer',
+            }}
+          >
+            {t('history.confirmClear')}
+          </button>
+          <button
+            onClick={() => setConfirming(false)}
+            style={{
+              padding: '6px 14px', background: 'var(--bg-active)', color: 'var(--text-secondary)',
+              border: 'none', borderRadius: 6, fontSize: 12, cursor: 'pointer',
+            }}
+          >
+            {t('history.cancel')}
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setConfirming(true)}
+          style={{
+            padding: '6px 14px', background: 'transparent', color: 'var(--error-text)',
+            border: '1px solid var(--error)', borderRadius: 6, fontSize: 12, cursor: 'pointer',
+          }}
+        >
+          {t('history.clearAll')}
+        </button>
+      )}
+    </SettingsGroup>
   )
 }
 

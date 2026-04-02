@@ -1,64 +1,9 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
-import { useSettingsStore, resolveTheme } from '../../stores/settings'
-
-interface TerminalViewProps {
-  ptyId: string | null
-  isActive: boolean
-}
-
-const DARK_THEME = {
-  background: '#191919',
-  foreground: '#F0EDE8',
-  cursor: '#C9A87C',
-  cursorAccent: '#191919',
-  selectionBackground: 'rgba(201, 168, 124, 0.3)',
-  black: '#191919',
-  red: '#FC8181',
-  green: '#68D391',
-  yellow: '#ECC94B',
-  blue: '#7AA2F7',
-  magenta: '#BB9AF7',
-  cyan: '#7DCFFF',
-  white: '#F0EDE8',
-  brightBlack: '#6B6B6B',
-  brightRed: '#FC8181',
-  brightGreen: '#68D391',
-  brightYellow: '#ECC94B',
-  brightBlue: '#7AA2F7',
-  brightMagenta: '#BB9AF7',
-  brightCyan: '#7DCFFF',
-  brightWhite: '#FFFFFF'
-}
-
-const LIGHT_THEME = {
-  background: '#FAFAF8',
-  foreground: '#1A1A1A',
-  cursor: '#7A6244',
-  cursorAccent: '#FAFAF8',
-  selectionBackground: 'rgba(122, 98, 68, 0.2)',
-  black: '#1A1A1A',
-  red: '#C53030',
-  green: '#2E8B57',
-  yellow: '#B8860B',
-  blue: '#2563EB',
-  magenta: '#7C3AED',
-  cyan: '#0891B2',
-  white: '#F0EDE8',
-  brightBlack: '#999999',
-  brightRed: '#E53E3E',
-  brightGreen: '#38A169',
-  brightYellow: '#D69E2E',
-  brightBlue: '#3B82F6',
-  brightMagenta: '#8B5CF6',
-  brightCyan: '#06B6D4',
-  brightWhite: '#FFFFFF'
-}
-
-function getTerminalTheme(): typeof DARK_THEME {
-  return resolveTheme(useSettingsStore.getState().theme) === 'light' ? LIGHT_THEME : DARK_THEME
-}
+import { useSettingsStore } from '../../stores/settings'
+import { getTerminalTheme } from './terminal-theme'
+import { useI18n } from '../../i18n'
 
 function safeFit(container: HTMLDivElement | null, fitAddon: FitAddon | null) {
   if (!fitAddon || !container) return
@@ -70,12 +15,33 @@ function safeFit(container: HTMLDivElement | null, fitAddon: FitAddon | null) {
   }
 }
 
+interface PendingImage {
+  path: string
+  name: string
+  size: string
+}
+
 export function TerminalView({ ptyId, isActive }: TerminalViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
   const fontSize = useSettingsStore((s) => s.fontSize)
   const theme = useSettingsStore((s) => s.theme)
+  const { t } = useI18n()
+  const [pendingImage, setPendingImage] = useState<PendingImage | null>(null)
+
+  const confirmImage = useCallback(() => {
+    if (!pendingImage || !ptyId) return
+    const quoted = pendingImage.path.includes(' ') ? `"${pendingImage.path}"` : pendingImage.path
+    window.api.pty.write(ptyId, quoted)
+    setPendingImage(null)
+    termRef.current?.focus()
+  }, [pendingImage, ptyId])
+
+  const cancelImage = useCallback(() => {
+    setPendingImage(null)
+    termRef.current?.focus()
+  }, [])
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -125,8 +91,28 @@ export function TerminalView({ ptyId, isActive }: TerminalViewProps) {
       }
 
       if (event.type === 'keydown' && event.key === 'v') {
-        navigator.clipboard.readText().then(text => {
+        // Check for image in clipboard first
+        navigator.clipboard.read().then(async (items) => {
+          for (const item of items) {
+            const imageType = item.types.find(t => t.startsWith('image/'))
+            if (imageType) {
+              const blob = await item.getType(imageType)
+              const buffer = await blob.arrayBuffer()
+              const path = await window.api.clipboard.saveImage(buffer)
+              const sizeKB = (buffer.byteLength / 1024).toFixed(0)
+              const name = path.split('/').pop() || 'image.png'
+              setPendingImage({ path, name, size: `${sizeKB} KB` })
+              return
+            }
+          }
+          // No image — fall back to text paste
+          const text = await navigator.clipboard.readText()
           if (ptyId && text) window.api.pty.write(ptyId, text)
+        }).catch(() => {
+          // Fallback if clipboard.read() not supported
+          navigator.clipboard.readText().then(text => {
+            if (ptyId && text) window.api.pty.write(ptyId, text)
+          })
         })
         return false
       }
@@ -179,18 +165,55 @@ export function TerminalView({ ptyId, isActive }: TerminalViewProps) {
     }
   }, [isActive])
 
+  // Handle Enter/Escape for image confirm bar
+  useEffect(() => {
+    if (!pendingImage) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') { e.preventDefault(); confirmImage() }
+      if (e.key === 'Escape') { e.preventDefault(); cancelImage() }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [pendingImage, confirmImage, cancelImage])
+
   return (
-    <div
-      ref={containerRef}
-      style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        display: isActive ? 'block' : 'none',
-        overflow: 'hidden'
-      }}
-    />
+    <div style={{
+      position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+      display: isActive ? 'flex' : 'none', flexDirection: 'column', overflow: 'hidden',
+    }}>
+      {pendingImage && (
+        <div style={{
+          padding: '8px 16px', background: 'var(--bg-secondary)',
+          borderBottom: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0,
+          animation: 'slideDown 0.15s ease-out',
+        }}>
+          <span style={{ fontSize: 16 }}>🖼</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>{pendingImage.name}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{pendingImage.size} · PNG</div>
+          </div>
+          <div
+            onClick={confirmImage}
+            style={{
+              padding: '4px 12px', borderRadius: 4, fontSize: 12, cursor: 'pointer',
+              background: 'var(--accent)', color: '#fff',
+            }}
+          >
+            {t('terminal.sendImage')}
+          </div>
+          <div
+            onClick={cancelImage}
+            style={{
+              padding: '4px 12px', borderRadius: 4, fontSize: 12, cursor: 'pointer',
+              background: 'var(--bg-active)', color: 'var(--text-secondary)',
+            }}
+          >
+            {t('terminal.cancelImage')}
+          </div>
+        </div>
+      )}
+      <div ref={containerRef} style={{ flex: 1, overflow: 'hidden' }} />
+    </div>
   )
 }

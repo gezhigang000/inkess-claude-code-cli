@@ -176,15 +176,15 @@ export function StatusBar() {
         })}
       </div>
 
-      {/* Balance — with low balance warning */}
+      {/* Balance — with low balance warning (skip warning when balance not yet loaded) */}
       <div
         title={`${t('app.balance')}: ¥${(balance / 100).toFixed(2)}`}
         style={{
-          color: balance < 100 ? 'var(--error-text)' : balance < 500 ? 'var(--warning-text)' : undefined,
-          fontWeight: balance < 100 ? 600 : undefined,
+          color: balance > 0 && balance < 100 ? 'var(--error-text)' : balance > 0 && balance < 500 ? 'var(--warning-text)' : undefined,
+          fontWeight: balance > 0 && balance < 100 ? 600 : undefined,
         }}
       >
-        {balance < 100 && '⚠ '}¥{(balance / 100).toFixed(2)}
+        {balance > 0 && balance < 100 && '⚠ '}¥{(balance / 100).toFixed(2)}
       </div>
     </div>
   )

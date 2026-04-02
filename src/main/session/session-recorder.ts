@@ -1,6 +1,5 @@
 import { appendFileSync, mkdirSync, statSync, unlinkSync } from 'fs'
 import { join } from 'path'
-import { app } from 'electron'
 import log from '../logger'
 
 export interface SessionMeta {
@@ -30,8 +29,8 @@ export class SessionRecorder {
   private recordings = new Map<string, ActiveRecording>()
   private sessionsDir: string
 
-  constructor() {
-    this.sessionsDir = join(app.getPath('userData'), 'sessions')
+  constructor(userDataPath: string) {
+    this.sessionsDir = join(userDataPath, 'sessions')
     mkdirSync(this.sessionsDir, { recursive: true })
   }
 

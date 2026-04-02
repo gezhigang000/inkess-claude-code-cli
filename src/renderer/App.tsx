@@ -11,6 +11,7 @@ import { SettingsPanel } from './views/settings/SettingsPanel'
 import { UpdateToast } from './views/update/UpdateToast'
 import { StatusBar } from './views/statusbar/StatusBar'
 import { CommandPalette } from './views/command-palette/CommandPalette'
+import { SessionHistoryView } from './views/session-history/SessionHistoryView'
 import { useI18n } from './i18n'
 
 const DEFAULT_CWD = window.api?.homedir || '/'
@@ -44,6 +45,9 @@ export function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [pendingCloseTabId, setPendingCloseTabId] = useState<string | null>(null)
   const [showCommandPalette, setShowCommandPalette] = useState(false)
+  const [showHistory, setShowHistory] = useState<string | null>(null)
+  const [dragOver, setDragOver] = useState(false)
+  const dragCounterRef = useRef(0)
   const pendingCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [updateInfo, setUpdateInfo] = useState<{ current: string; latest: string } | null>(null)
   const [appUpdateStatus, setAppUpdateStatus] = useState<{
@@ -259,6 +263,23 @@ export function App() {
         const tab = store.tabs.find(t => t.id === store.activeTabId)
         if (tab?.ptyId) window.api.pty.write(tab.ptyId, '/model\n')
       }
+      // Cmd+O → open folder
+      if (mod && e.key === 'o' && !e.shiftKey) {
+        e.preventDefault()
+        handleSelectDirectory()
+      }
+      // Cmd+1~9 → switch to tab N
+      if (mod && !e.shiftKey && e.key >= '1' && e.key <= '9') {
+        e.preventDefault()
+        const idx = parseInt(e.key) - 1
+        const store = useTerminalStore.getState()
+        if (store.tabs[idx]) store.setActiveTab(store.tabs[idx].id)
+      }
+      // Cmd+Shift+H → session history
+      if (mod && e.shiftKey && e.key === 'H') {
+        e.preventDefault()
+        setShowHistory(prev => prev !== null ? null : '')
+      }
       // Cmd+Shift+C / Ctrl+Shift+C → /compact command
       if (mod && e.shiftKey && e.key === 'C') {
         e.preventDefault()
@@ -317,6 +338,31 @@ export function App() {
     }
   }, [setCliInfo])
 
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault()
+    dragCounterRef.current = 0
+    setDragOver(false)
+    const files = Array.from(e.dataTransfer.files)
+    if (files.length === 0) return
+
+    for (const file of files) {
+      const filePath = (file as any).path as string
+      if (!filePath) continue
+      const isDir = await window.api.fs.isDirectory(filePath)
+      if (isDir) {
+        handleNewTab(filePath)
+      } else {
+        // Insert file path into active PTY
+        const store = useTerminalStore.getState()
+        const tab = store.tabs.find(t => t.id === store.activeTabId)
+        if (tab?.ptyId) {
+          const quoted = filePath.includes(' ') ? `"${filePath}"` : filePath
+          window.api.pty.write(tab.ptyId, quoted)
+        }
+      }
+    }
+  }, [handleNewTab])
+
   const plainTitleBar = (
     <div
       className="titlebar-drag"
@@ -353,7 +399,36 @@ export function App() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+    <div
+      style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}
+      onDragOver={(e) => e.preventDefault()}
+      onDragEnter={(e) => { e.preventDefault(); dragCounterRef.current++; setDragOver(true) }}
+      onDragLeave={(e) => { e.preventDefault(); dragCounterRef.current--; if (dragCounterRef.current <= 0) { dragCounterRef.current = 0; setDragOver(false) } }}
+      onDrop={handleDrop}
+    >
+      {dragOver && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 500, background: 'rgba(0,0,0,0.4)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          pointerEvents: 'none',
+        }}>
+          <div style={{
+            padding: '32px 48px', borderRadius: 16,
+            border: '2px dashed var(--accent)', background: 'var(--bg-secondary)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+          }}>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.5">
+              <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
+            </svg>
+            <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)' }}>
+              {t('app.dropToOpen')}
+            </span>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              {t('app.dropHint')}
+            </span>
+          </div>
+        </div>
+      )}
       <TitleTabBar
         tabs={tabs}
         activeTabId={activeTabId}
@@ -369,6 +444,7 @@ export function App() {
           onSettings={() => { setShowSettings(true); window.api.analytics?.track('settings_open') }}
           onNewSession={handleSelectDirectory}
           onCommandPalette={() => setShowCommandPalette(true)}
+          onOpenHistory={(sessionId) => setShowHistory(sessionId || '')}
           onOpenProject={(cwd) => {
             const existing = tabs.find(t => t.cwd === cwd)
             if (existing) {
@@ -379,7 +455,13 @@ export function App() {
           }}
         />
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          {tabs.length === 0 ? (
+          {showHistory !== null ? (
+            <SessionHistoryView
+              onBack={() => setShowHistory(null)}
+              onOpenInTerminal={(cwd) => { setShowHistory(null); handleNewTab(cwd) }}
+              initialSessionId={showHistory || undefined}
+            />
+          ) : tabs.length === 0 ? (
             <WelcomeScreen onOpenFolder={handleSelectDirectory} onOpenProject={handleNewTab} />
           ) : (
             <>
@@ -403,6 +485,7 @@ export function App() {
             const { theme, setTheme } = useSettingsStore.getState()
             setTheme(theme === 'dark' ? 'light' : theme === 'light' ? 'auto' : 'dark')
           }}
+          onHistory={() => { setShowCommandPalette(false); setShowHistory('') }}
         />
       )}
       {updateInfo && (

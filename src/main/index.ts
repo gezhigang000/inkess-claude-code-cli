@@ -9,7 +9,9 @@ import { AuthManager } from './auth/auth-manager'
 import { checkForAppUpdate, downloadAppUpdate, installAppUpdate, onUpdateStatus } from './updater'
 import { Analytics } from './analytics'
 import { ErrorReporter } from './error-reporter'
-import { mkdirSync } from 'fs'
+import { SessionRecorder } from './session/session-recorder'
+import { SessionStore } from './session/session-store'
+import { mkdirSync, statSync, writeFileSync, readdirSync, unlinkSync } from 'fs'
 
 process.on('uncaughtException', (err) => log.error('Uncaught:', err))
 process.on('unhandledRejection', (reason) => log.error('Unhandled:', reason))
@@ -20,6 +22,8 @@ const ptyMonitor = new PtyOutputMonitor()
 const cliManager = new CliManager()
 const toolsManager = new ToolsManager()
 const authManager = new AuthManager()
+const sessionRecorder = new SessionRecorder(app.getPath('userData'))
+const sessionStore = new SessionStore(sessionRecorder.getSessionsDir())
 const analytics = new Analytics()
 const errorReporter = new ErrorReporter()
 analytics.setTokenGetter(() => {
@@ -231,13 +235,21 @@ ipcMain.handle('pty:create', (_event, options: {
 
     const id = ptyManager.create(options.cwd, mergedEnv, command, args)
     ptyMonitor.watch(id)
+
+    // Start session recording
+    const title = options.cwd.replace(/\\/g, '/').split('/').pop() || 'terminal'
+    sessionRecorder.startRecording(id, id, options.cwd, title)
+
     ptyManager.onData(id, (data) => {
       safeSend('pty:data', { id, data })
       ptyMonitor.feed(id, data)
+      sessionRecorder.recordData(id, data)
     })
     ptyManager.onExit(id, (exitCode) => {
       safeSend('pty:exit', { id, exitCode })
       ptyMonitor.unwatch(id)
+      const meta = sessionRecorder.stopRecording(id)
+      if (meta) sessionStore.addSession(meta)
     })
     analytics.track('tab_create')
     return { id }
@@ -249,6 +261,7 @@ ipcMain.handle('pty:create', (_event, options: {
 
 ipcMain.on('pty:write', (_event, { id, data }: { id: string; data: string }) => {
   ptyManager.write(id, data)
+  sessionRecorder.recordInput(id, data)
 })
 
 ipcMain.on('pty:resize', (_event, { id, cols, rows }: { id: string; cols: number; rows: number }) => {
@@ -258,6 +271,40 @@ ipcMain.on('pty:resize', (_event, { id, cols, rows }: { id: string; cols: number
 ipcMain.on('pty:kill', (_event, { id }: { id: string }) => {
   ptyManager.kill(id)
   analytics.track('tab_close')
+})
+
+// IPC: Session history
+ipcMain.handle('session:list', () => sessionStore.listSessions())
+ipcMain.handle('session:read', (_event, id: string) => sessionStore.readSession(id))
+ipcMain.handle('session:delete', (_event, id: string) => sessionStore.deleteSession(id))
+ipcMain.handle('session:clearAll', () => sessionStore.clearAll())
+ipcMain.handle('session:search', (_event, query: string) => sessionStore.searchSessions(query))
+
+// IPC: File system
+ipcMain.handle('fs:isDirectory', (_event, path: string) => {
+  try { return statSync(path).isDirectory() } catch { return false }
+})
+
+ipcMain.handle('clipboard:saveImage', (_event, buffer: ArrayBuffer) => {
+  const tmpDir = join(app.getPath('userData'), 'tmp')
+  mkdirSync(tmpDir, { recursive: true })
+  const now = new Date()
+  const ts = now.toISOString().replace(/[-:T]/g, '').slice(0, 14)
+  const filename = `paste-${ts}.png`
+  const filepath = join(tmpDir, filename)
+  writeFileSync(filepath, Buffer.from(buffer))
+
+  // Clean up old tmp files (>7 days)
+  try {
+    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000
+    for (const f of readdirSync(tmpDir)) {
+      if (!f.startsWith('paste-')) continue
+      const fpath = join(tmpDir, f)
+      try { if (statSync(fpath).mtimeMs < cutoff) unlinkSync(fpath) } catch { /* skip */ }
+    }
+  } catch { /* ignore */ }
+
+  return filepath
 })
 
 // IPC: Shell actions

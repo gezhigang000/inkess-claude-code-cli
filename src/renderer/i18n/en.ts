@@ -3,6 +3,8 @@ export const en = {
   'app.title': 'Inkess Claude Code CLI',
   'app.connected': 'Connected',
   'app.balance': 'Balance',
+  'app.dropToOpen': 'Drop to open',
+  'app.dropHint': 'Drop a folder to open as project, or a file to insert its path',
 
   // Tab context menu
   'tab.openInFinder': 'Open in Finder',
@@ -121,7 +123,31 @@ export const en = {
   'sidebar.projects': 'Projects',
   'sidebar.collapse': 'Collapse Sidebar',
   'sidebar.expand': 'Expand Sidebar',
+  'sidebar.pinned': 'Pinned',
+  'sidebar.pin': 'Pin Project',
+  'sidebar.unpin': 'Unpin Project',
   'sidebar.deleteSession': 'Remove from history',
+
+  // Session History
+  'history.title': 'Session History',
+  'history.search': 'Search conversations...',
+  'history.noSessions': 'No recorded sessions yet',
+  'history.noResults': 'No matching sessions',
+  'history.today': 'Today',
+  'history.yesterday': 'Yesterday',
+  'history.back': 'Back to Terminal',
+  'history.openInTerminal': 'Open in Terminal',
+  'history.copyAll': 'Copy All',
+  'history.delete': 'Delete',
+  'history.clearAll': 'Clear All History',
+  'history.clearConfirm': 'Are you sure? This cannot be undone.',
+  'history.confirmClear': 'Yes, Delete All',
+  'history.cancel': 'Cancel',
+  'history.selectSession': 'Select a session to preview',
+  'history.copied': 'Copied!',
+  'history.loadFailed': 'Failed to load session',
+  'terminal.sendImage': 'Send ↵',
+  'terminal.cancelImage': 'Cancel',
 
   // StatusBar
   'statusbar.preventingSleep': 'Preventing sleep',

@@ -6,6 +6,8 @@ import { useI18n } from '../../i18n'
 const SESSION_HISTORY_KEY = 'inkess-session-history'
 const MAX_HISTORY = 20
 const SIDEBAR_COLLAPSED_KEY = 'inkess-sidebar-collapsed'
+const PINNED_PROJECTS_KEY = 'inkess-pinned-projects'
+const MAX_PINNED = 10
 
 export interface SessionRecord {
   id: string
@@ -16,11 +18,12 @@ export interface SessionRecord {
   status: 'active' | 'closed'
 }
 
-export function Sidebar({ onSettings, onOpenProject, onNewSession, onCommandPalette }: {
+export function Sidebar({ onSettings, onOpenProject, onNewSession, onCommandPalette, onOpenHistory }: {
   onSettings?: () => void
   onOpenProject?: (cwd: string) => void
   onNewSession?: () => void
   onCommandPalette?: () => void
+  onOpenHistory?: (sessionId?: string) => void
 }) {
   const { tabs } = useTerminalStore()
   const [hoveredDir, setHoveredDir] = useState<string | null>(null)
@@ -30,8 +33,21 @@ export function Sidebar({ onSettings, onOpenProject, onNewSession, onCommandPale
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true' } catch { return false }
   })
+  const [pinnedDirs, setPinnedDirs] = useState<string[]>(() => {
+    try { const raw = localStorage.getItem(PINNED_PROJECTS_KEY); return raw ? JSON.parse(raw) : [] } catch { return [] }
+  })
+  const [contextMenu, setContextMenu] = useState<{ cwd: string; x: number; y: number } | null>(null)
   const editRef = useRef<HTMLInputElement>(null)
   const { t } = useI18n()
+
+  const togglePin = useCallback((cwd: string) => {
+    setPinnedDirs(prev => {
+      const next = prev.includes(cwd) ? prev.filter(p => p !== cwd) : [...prev, cwd].slice(0, MAX_PINNED)
+      try { localStorage.setItem(PINNED_PROJECTS_KEY, JSON.stringify(next)) } catch { /* ignore */ }
+      return next
+    })
+    setContextMenu(null)
+  }, [])
 
   const toggleCollapsed = useCallback(() => {
     setCollapsed(prev => {
@@ -102,7 +118,11 @@ export function Sidebar({ onSettings, onOpenProject, onNewSession, onCommandPale
     if (diff < 60000) return t('sidebar.justNow')
     if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
     if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`
-    return t('sidebar.yesterday')
+    const d = new Date(ts)
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    if (d.toDateString() === yesterday.toDateString()) return t('sidebar.yesterday')
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' })
   }
 
   // Group all sessions by project directory (cwd)
@@ -119,6 +139,81 @@ export function Sidebar({ onSettings, onOpenProject, onNewSession, onCommandPale
     })
     return groups
   }, [allSessions])
+
+  const renderProjectRow = (cwd: string, sessions: SessionRecord[]) => {
+    const hasActive = sessions.some(s => s.status === 'active')
+    const primarySession = sessions.find(s => s.status === 'active') || sessions[0]
+    const displayName = primarySession.name || cwd.replace(/\\/g, '/').split('/').pop() || 'terminal'
+    const isPinned = pinnedDirs.includes(cwd)
+
+    return (
+      <div key={cwd} style={{ marginBottom: 2 }}>
+        <div
+          onClick={() => {
+            if (hasActive) {
+              const activeSession = sessions.find(s => s.status === 'active')
+              if (activeSession) useTerminalStore.getState().setActiveTab(activeSession.id)
+            } else {
+              onOpenHistory?.()
+            }
+          }}
+          onContextMenu={(e) => { e.preventDefault(); setContextMenu({ cwd, x: e.clientX, y: e.clientY }) }}
+          onMouseEnter={() => setHoveredDir(cwd)}
+          onMouseLeave={() => setHoveredDir(null)}
+          onDoubleClick={() => handleRename(primarySession)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 6, cursor: 'pointer', fontSize: 13,
+            color: hoveredDir === cwd ? 'var(--text-primary)' : 'var(--text-secondary)',
+            background: hoveredDir === cwd ? 'var(--bg-hover)' : 'transparent',
+            transition: 'background 0.12s, color 0.12s',
+          }}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={isPinned ? 'var(--accent)' : 'currentColor'} strokeWidth="1.5">
+            <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
+          </svg>
+          {editingId === primarySession.id ? (
+            <input ref={editRef} value={editValue} onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setEditingId(null) }}
+              onBlur={commitRename} onClick={(e) => e.stopPropagation()}
+              style={{ flex: 1, background: 'var(--bg-tertiary)', border: '1px solid var(--accent)', borderRadius: 3, padding: '1px 4px', fontSize: 13, color: 'var(--text-primary)', outline: 'none' }}
+            />
+          ) : (
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+              {displayName}
+            </span>
+          )}
+          {hasActive && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)', flexShrink: 0 }} />}
+          {!hasActive && hoveredDir === cwd && (
+            <span
+              onClick={(e) => { e.stopPropagation(); handleDeleteSessionsByCwd(cwd) }}
+              title={t('sidebar.deleteSession')}
+              style={{
+                width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                borderRadius: 4, fontSize: 13, color: 'var(--text-muted)', flexShrink: 0, cursor: 'pointer',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-active)'; e.currentTarget.style.color = 'var(--error-text)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)' }}
+            >×</span>
+          )}
+          {!hasActive && hoveredDir !== cwd && primarySession.closedAt && (
+            <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>{formatTimeAgo(primarySession.closedAt)}</span>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  const renderProjectGroup = (label: string, entries: [string, SessionRecord[]][]) => {
+    if (entries.length === 0) return null
+    return (
+      <>
+        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6, padding: '4px 2px' }}>
+          {label}
+        </div>
+        {entries.map(([cwd, sessions]) => renderProjectRow(cwd, sessions))}
+      </>
+    )
+  }
 
   const topActionBtnStyle = (key: string) => ({
     display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 13,
@@ -254,76 +349,42 @@ export function Sidebar({ onSettings, onOpenProject, onNewSession, onCommandPale
 
       {/* Projects list */}
       <div style={{ padding: '4px 10px', flex: 1, overflowY: 'auto' }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6, padding: '4px 2px' }}>
-          {t('sidebar.projects')}
-        </div>
-
-        {Object.entries(projectGroups).map(([cwd, sessions]) => {
-          const hasActive = sessions.some(s => s.status === 'active')
-          const primarySession = sessions.find(s => s.status === 'active') || sessions[0]
-          const displayName = primarySession.name || cwd.replace(/\\/g, '/').split('/').pop() || 'terminal'
-
-          return (
-            <div key={cwd} style={{ marginBottom: 2 }}>
-              <div
-                onClick={() => {
-                  if (hasActive) {
-                    const activeSession = sessions.find(s => s.status === 'active')
-                    if (activeSession) useTerminalStore.getState().setActiveTab(activeSession.id)
-                  } else {
-                    onOpenProject?.(cwd)
-                  }
-                }}
-                onMouseEnter={() => setHoveredDir(cwd)}
-                onMouseLeave={() => setHoveredDir(null)}
-                onDoubleClick={() => handleRename(primarySession)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 6, cursor: 'pointer', fontSize: 13,
-                  color: hoveredDir === cwd ? 'var(--text-primary)' : 'var(--text-secondary)',
-                  background: hoveredDir === cwd ? 'var(--bg-hover)' : 'transparent',
-                  transition: 'background 0.12s, color 0.12s',
-                }}
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
-                </svg>
-                {editingId === primarySession.id ? (
-                  <input ref={editRef} value={editValue} onChange={(e) => setEditValue(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setEditingId(null) }}
-                    onBlur={commitRename} onClick={(e) => e.stopPropagation()}
-                    style={{ flex: 1, background: 'var(--bg-tertiary)', border: '1px solid var(--accent)', borderRadius: 3, padding: '1px 4px', fontSize: 13, color: 'var(--text-primary)', outline: 'none' }}
-                  />
-                ) : (
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                    {displayName}
-                  </span>
-                )}
-                {hasActive && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)', flexShrink: 0 }} />}
-                {!hasActive && hoveredDir === cwd && (
-                  <span
-                    onClick={(e) => { e.stopPropagation(); handleDeleteSessionsByCwd(cwd) }}
-                    title={t('sidebar.deleteSession')}
-                    style={{
-                      width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      borderRadius: 4, fontSize: 13, color: 'var(--text-muted)', flexShrink: 0,
-                      cursor: 'pointer',
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-active)'; e.currentTarget.style.color = 'var(--error-text)' }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)' }}
-                  >×</span>
-                )}
-                {!hasActive && hoveredDir !== cwd && primarySession.closedAt && (
-                  <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>{formatTimeAgo(primarySession.closedAt)}</span>
-                )}
-              </div>
-            </div>
-          )
-        })}
+        {renderProjectGroup(t('sidebar.pinned'), Object.entries(projectGroups).filter(([cwd]) => pinnedDirs.includes(cwd)))}
+        {renderProjectGroup(t('sidebar.projects'), Object.entries(projectGroups).filter(([cwd]) => !pinnedDirs.includes(cwd)))}
 
         {Object.keys(projectGroups).length === 0 && (
           <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '8px 2px' }}>{t('sidebar.noProjects')}</div>
         )}
       </div>
+
+      {/* Right-click context menu */}
+      {contextMenu && (
+        <>
+          <div onClick={() => setContextMenu(null)} style={{ position: 'fixed', inset: 0, zIndex: 400 }} />
+          <div style={{
+            position: 'fixed', left: contextMenu.x, top: contextMenu.y, zIndex: 401,
+            background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 6,
+            boxShadow: '0 4px 16px rgba(0,0,0,0.3)', padding: '4px 0', minWidth: 160,
+          }}>
+            <div
+              onClick={() => togglePin(contextMenu.cwd)}
+              style={{ padding: '6px 12px', fontSize: 12, cursor: 'pointer', color: 'var(--text-primary)' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              {pinnedDirs.includes(contextMenu.cwd) ? t('sidebar.unpin') : t('sidebar.pin')}
+            </div>
+            <div
+              onClick={() => { onOpenProject?.(contextMenu.cwd); setContextMenu(null) }}
+              style={{ padding: '6px 12px', fontSize: 12, cursor: 'pointer', color: 'var(--text-primary)' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              {t('history.openInTerminal')}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Settings */}
       <div style={{ padding: '8px 10px', borderTop: '1px solid var(--border)' }}>

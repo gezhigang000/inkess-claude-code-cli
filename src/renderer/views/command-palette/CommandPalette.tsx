@@ -14,11 +14,12 @@ interface Command {
   action: () => void
 }
 
-export function CommandPalette({ onClose, onNewTab, onSettings, onToggleTheme }: {
+export function CommandPalette({ onClose, onNewTab, onSettings, onToggleTheme, onHistory }: {
   onClose: () => void
   onNewTab: () => void
   onSettings: () => void
   onToggleTheme: () => void
+  onHistory?: () => void
 }) {
   const [query, setQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -46,6 +47,7 @@ export function CommandPalette({ onClose, onNewTab, onSettings, onToggleTheme }:
     { id: 'new-tab', label: t('cmdPalette.newTab'), category: 'App', shortcut: isMac ? '⌘T' : 'Ctrl+T', action: onNewTab },
     { id: 'settings', label: t('cmdPalette.settings'), category: 'App', shortcut: isMac ? '⌘,' : 'Ctrl+,', action: onSettings },
     { id: 'toggle-theme', label: t('cmdPalette.toggleTheme'), category: 'App', action: onToggleTheme },
+    { id: 'history', label: t('history.title'), category: 'App', shortcut: isMac ? '⌘⇧H' : 'Ctrl+Shift+H', action: () => onHistory?.() },
     // Mode commands
     { id: 'mode-suggest', label: t('cmdPalette.modeSuggest'), category: 'Mode', action: () => writeToPty('/permissions suggest\n') },
     { id: 'mode-autoedit', label: t('cmdPalette.modeAutoEdit'), category: 'Mode', action: () => writeToPty('/permissions auto-edit\n') },

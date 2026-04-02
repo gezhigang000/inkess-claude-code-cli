@@ -5,6 +5,8 @@ export const zh: Record<TranslationKey, string> = {
   'app.title': 'Inkess Claude Code CLI',
   'app.connected': '已连接',
   'app.balance': '余额',
+  'app.dropToOpen': '拖放以打开',
+  'app.dropHint': '拖入文件夹打开项目，或拖入文件插入路径',
 
   // Tab context menu
   'tab.openInFinder': '在 Finder 中打开',
@@ -123,7 +125,31 @@ export const zh: Record<TranslationKey, string> = {
   'sidebar.projects': '项目',
   'sidebar.collapse': '折叠侧边栏',
   'sidebar.expand': '展开侧边栏',
+  'sidebar.pinned': '固定',
+  'sidebar.pin': '固定项目',
+  'sidebar.unpin': '取消固定',
   'sidebar.deleteSession': '从历史中移除',
+
+  // Session History
+  'history.title': '历史会话',
+  'history.search': '搜索对话内容...',
+  'history.noSessions': '暂无录制的会话',
+  'history.noResults': '没有匹配的会话',
+  'history.today': '今天',
+  'history.yesterday': '昨天',
+  'history.back': '返回终端',
+  'history.openInTerminal': '在终端中打开',
+  'history.copyAll': '复制全部',
+  'history.delete': '删除',
+  'history.clearAll': '清除所有历史',
+  'history.clearConfirm': '确定要删除吗？此操作无法撤销。',
+  'history.confirmClear': '确认删除全部',
+  'history.cancel': '取消',
+  'history.selectSession': '选择一个会话进行预览',
+  'history.copied': '已复制！',
+  'history.loadFailed': '加载会话失败',
+  'terminal.sendImage': '发送 ↵',
+  'terminal.cancelImage': '取消',
 
   // StatusBar
   'statusbar.preventingSleep': '阻止休眠中',
