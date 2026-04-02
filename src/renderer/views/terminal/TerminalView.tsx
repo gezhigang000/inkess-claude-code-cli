@@ -32,7 +32,8 @@ export function TerminalView({ ptyId, isActive }: TerminalViewProps) {
 
   const confirmImage = useCallback(() => {
     if (!pendingImage || !ptyId) return
-    const quoted = pendingImage.path.includes(' ') ? `"${pendingImage.path}"` : pendingImage.path
+    const normalized = pendingImage.path.replace(/\\/g, '/')
+    const quoted = normalized.includes(' ') ? `"${normalized}"` : normalized
     window.api.pty.write(ptyId, quoted)
     setPendingImage(null)
     termRef.current?.focus()
@@ -82,7 +83,7 @@ export function TerminalView({ ptyId, isActive }: TerminalViewProps) {
     // Copy: Ctrl+C (Win/Linux) or Cmd+C (Mac) when text is selected
     // Paste: Ctrl+V (Win/Linux) or Cmd+V (Mac)
     term.attachCustomKeyEventHandler((event) => {
-      const modifier = navigator.platform.includes('Mac') ? event.metaKey : event.ctrlKey
+      const modifier = window.api?.platform === 'darwin' ? event.metaKey : event.ctrlKey
       if (!modifier) return true
 
       if (event.type === 'keydown' && event.key === 'c' && term.hasSelection()) {

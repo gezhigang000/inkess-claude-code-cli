@@ -352,11 +352,12 @@ export function App() {
       if (isDir) {
         handleNewTab(filePath)
       } else {
-        // Insert file path into active PTY
+        // Insert file path into active PTY (normalize backslashes for Git Bash on Windows)
         const store = useTerminalStore.getState()
         const tab = store.tabs.find(t => t.id === store.activeTabId)
         if (tab?.ptyId) {
-          const quoted = filePath.includes(' ') ? `"${filePath}"` : filePath
+          const normalized = filePath.replace(/\\/g, '/')
+          const quoted = normalized.includes(' ') ? `"${normalized}"` : normalized
           window.api.pty.write(tab.ptyId, quoted)
         }
       }
