@@ -334,10 +334,14 @@ ipcMain.handle('shell:selectDirectory', async () => {
   return result.canceled ? null : result.filePaths[0]
 })
 
-// IPC: Renderer error reporting
+// IPC: Renderer error/warn reporting
 ipcMain.on('log:error', (_event, { message, stack }: { message: string; stack?: string }) => {
   log.error(`[Renderer] ${message}`, stack || '')
-  errorReporter.report(message, stack, 'renderer')
+  errorReporter.report(message, stack, 'renderer', 'error')
+})
+ipcMain.on('log:warn', (_event, { message }: { message: string }) => {
+  log.warn(`[Renderer] ${message}`)
+  errorReporter.report(message, undefined, 'renderer', 'warn')
 })
 
 // IPC: Log upload

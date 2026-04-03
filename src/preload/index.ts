@@ -152,6 +152,8 @@ const api = {
   log: {
     error: (message: string, stack?: string) =>
       ipcRenderer.send('log:error', { message, stack }),
+    warn: (message: string) =>
+      ipcRenderer.send('log:warn', { message }),
     uploadFile: () => ipcRenderer.invoke('logs:uploadFile') as Promise<{
       success: boolean; error?: string
     }>

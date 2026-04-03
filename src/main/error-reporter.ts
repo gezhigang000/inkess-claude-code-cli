@@ -8,6 +8,7 @@ const QUEUE_LIMIT = 10
 const MAX_QUEUE_SIZE = 200
 
 interface ErrorEntry {
+  level: 'error' | 'warn' | 'info'
   message: string
   stack?: string
   source: 'main' | 'renderer'
@@ -23,15 +24,15 @@ export class ErrorReporter {
   constructor() {
     this.timer = setInterval(() => this.flush(), FLUSH_INTERVAL)
 
-    // Hook electron-log: intercept error-level logs from main process
+    // Hook electron-log: intercept error and warn level logs from main process
     log.hooks.push((message, transport) => {
       if (transport !== log.transports.file) return message
-      if (message.level === 'error') {
+      if (message.level === 'error' || message.level === 'warn') {
         const text = message.data?.map((d: unknown) =>
           typeof d === 'string' ? d : d instanceof Error ? d.message : JSON.stringify(d)
         ).join(' ') || ''
         const stack = message.data?.find((d: unknown) => d instanceof Error)?.stack
-        this.report(text, stack, 'main')
+        this.report(text, stack, 'main', message.level as 'error' | 'warn')
       }
       return message
     })
@@ -41,10 +42,10 @@ export class ErrorReporter {
     this.tokenGetter = fn
   }
 
-  /** Queue an error for batch upload */
-  report(message: string, stack?: string, source: 'main' | 'renderer' = 'main'): void {
+  /** Queue an error/warn for batch upload */
+  report(message: string, stack?: string, source: 'main' | 'renderer' = 'main', level: 'error' | 'warn' | 'info' = 'error'): void {
     if (this.queue.length >= MAX_QUEUE_SIZE) return // Drop oldest to prevent memory leak
-    this.queue.push({ message: message.slice(0, 2000), stack: stack?.slice(0, 4000), source, ts: Date.now() })
+    this.queue.push({ level, message: message.slice(0, 2000), stack: stack?.slice(0, 4000), source, ts: Date.now() })
     if (this.queue.length >= QUEUE_LIMIT && !this.flushing) {
       this.flush()
     }

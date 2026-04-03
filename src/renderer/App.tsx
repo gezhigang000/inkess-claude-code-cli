@@ -347,9 +347,14 @@ export function App() {
 
     for (const file of files) {
       const filePath = (file as any).path as string
-      if (!filePath) continue
+      if (!filePath) {
+        console.warn('[Drop] file.path is empty for:', file.name)
+        continue
+      }
+      console.warn('[Drop] file.path:', filePath)
       const isDir = await window.api.fs.isDirectory(filePath)
       if (isDir) {
+        console.warn('[Drop] isDir=true, creating new tab')
         handleNewTab(filePath)
       } else {
         // Insert file path into active PTY (normalize backslashes for Git Bash on Windows)
@@ -358,7 +363,10 @@ export function App() {
         if (tab?.ptyId) {
           const normalized = filePath.replace(/\\/g, '/')
           const quoted = normalized.includes(' ') ? `"${normalized}"` : normalized
-          window.api.pty.write(tab.ptyId, quoted)
+          console.warn('[Drop] writing to PTY:', quoted)
+          window.api.pty.write(tab.ptyId, quoted + ' ')
+        } else {
+          console.warn('[Drop] no active PTY, cannot insert path')
         }
       }
     }
