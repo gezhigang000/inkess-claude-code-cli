@@ -96,6 +96,11 @@ export const en = {
   'settings.uploadingLogs': 'Uploading...',
   'settings.logsUploaded': 'Uploaded',
   'settings.logsUploadFailed': 'Upload Failed',
+  'settings.checkUpdate': 'Check for Updates',
+  'settings.checkingUpdate': 'Checking...',
+  'settings.updateAvailable': 'Update available: v{version}',
+  'settings.updateNotAvailable': 'Already up to date',
+  'settings.updateError': 'Check failed',
 
   // Welcome
   'welcome.openFolder': 'Open Working Directory',
@@ -151,6 +156,7 @@ export const en = {
 
   // StatusBar
   'statusbar.preventingSleep': 'Preventing sleep',
+  'statusbar.offline': 'No network',
 
   // Close Tab
   'tab.pressAgainToClose': 'Press again to close',
@@ -181,8 +187,10 @@ export const en = {
   // App Update
   'appUpdate.ready': 'v{version} ready to install',
   'appUpdate.available': 'App update v{version} available',
+  'appUpdate.downloading': 'Downloading update... {percent}%',
   'appUpdate.restartUpdate': 'Restart & Update',
   'appUpdate.download': 'Download',
+  'appUpdate.activeSessionWarning': 'You have active sessions. Make sure your work is saved before updating. Continue?',
 }
 
 export type TranslationKey = keyof typeof en

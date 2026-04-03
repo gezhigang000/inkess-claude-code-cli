@@ -35,6 +35,7 @@ export function StatusBar() {
   const [windowWidth, setWindowWidth] = useState(window.innerWidth)
   const [modeFlash, setModeFlash] = useState<string | null>(null)
   const modeFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [isOnline, setIsOnline] = useState(navigator.onLine)
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId)
 
@@ -82,6 +83,15 @@ export function StatusBar() {
     return () => window.removeEventListener('resize', handler)
   }, [])
 
+  // Track network status
+  useEffect(() => {
+    const onOnline = () => setIsOnline(true)
+    const onOffline = () => setIsOnline(false)
+    window.addEventListener('online', onOnline)
+    window.addEventListener('offline', onOffline)
+    return () => { window.removeEventListener('online', onOnline); window.removeEventListener('offline', onOffline) }
+  }, [])
+
   const isCompact = windowWidth < 700
   const isMedium = windowWidth < 900
   const currentMode = activeTab?.mode || 'suggest'
@@ -105,10 +115,17 @@ export function StatusBar() {
       alignItems: 'center', padding: '0 12px', borderTop: '1px solid var(--border)',
       fontSize: 12, color: 'var(--text-muted)', flexShrink: 0, gap: 12
     }}>
-      {/* Connection status — green dot only, no text when connected */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }} title={t('app.connected')}>
-        <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)' }} />
-      </div>
+      {/* Connection status */}
+      {isOnline ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }} title={t('app.connected')}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)' }} />
+        </div>
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--error-text)', fontWeight: 600 }} title={t('statusbar.offline')}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--error)' }} />
+          {t('statusbar.offline')}
+        </div>
+      )}
 
       {/* Git branch — SVG icon */}
       {!isMedium && activeTab?.gitBranch && (

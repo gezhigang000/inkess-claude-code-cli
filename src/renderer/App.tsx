@@ -507,20 +507,21 @@ export function App() {
           />
         </div>
       )}
-      {appUpdateStatus && appUpdateStatus.type === 'available' && (
+      {appUpdateStatus && (appUpdateStatus.type === 'available' || appUpdateStatus.type === 'downloading' || appUpdateStatus.type === 'downloaded') && (
         <AppUpdateToast
-          version={appUpdateStatus.version || ''}
+          status={appUpdateStatus}
           bottomOffset={updateInfo ? 100 : 16}
           onDownload={() => window.api.appUpdate.download()}
-          onDismiss={() => setAppUpdateStatus(null)}
-        />
-      )}
-      {appUpdateStatus && appUpdateStatus.type === 'downloaded' && (
-        <AppUpdateToast
-          version={appUpdateStatus.version || ''}
-          bottomOffset={updateInfo ? 100 : 16}
-          downloaded
-          onInstall={() => window.api.appUpdate.install()}
+          onInstall={() => {
+            // Check for active sessions before installing
+            const { tabs } = useTerminalStore.getState()
+            const activeTabs = tabs.filter(t => t.ptyId)
+            if (activeTabs.length > 0) {
+              const confirmed = window.confirm(t('appUpdate.activeSessionWarning'))
+              if (!confirmed) return
+            }
+            window.api.appUpdate.install()
+          }}
           onDismiss={() => setAppUpdateStatus(null)}
         />
       )}
@@ -933,31 +934,51 @@ function WelcomeScreen({ onOpenFolder, onOpenProject }: { onOpenFolder: () => vo
   )
 }
 
-function AppUpdateToast({ version, downloaded, bottomOffset, onDownload, onInstall, onDismiss }: {
-  version: string; downloaded?: boolean; bottomOffset?: number
+function AppUpdateToast({ status, bottomOffset, onDownload, onInstall, onDismiss }: {
+  status: { type: string; version?: string; percent?: number }
+  bottomOffset?: number
   onDownload?: () => void; onInstall?: () => void; onDismiss: () => void
 }) {
   const { t } = useI18n()
+  const version = status.version || ''
+  const isDownloading = status.type === 'downloading'
+  const isDownloaded = status.type === 'downloaded'
+  const percent = Math.round(status.percent || 0)
+
   return (
     <div style={{
       position: 'fixed', bottom: bottomOffset ?? 16, right: 16, background: 'var(--bg-secondary)',
       border: '1px solid var(--border)', borderRadius: 8, padding: '12px 16px',
-      display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, color: 'var(--text-primary)',
+      minWidth: 280, fontSize: 13, color: 'var(--text-primary)',
       boxShadow: '0 4px 12px rgba(0,0,0,0.3)', zIndex: 1000
     }}>
-      <span>{downloaded ? t('appUpdate.ready', { version }) : t('appUpdate.available', { version })}</span>
-      {downloaded ? (
-        <button onClick={onInstall} style={{
-          padding: '4px 12px', borderRadius: 4, border: 'none',
-          background: 'var(--accent)', color: '#fff', cursor: 'pointer', fontSize: 12
-        }}>{t('appUpdate.restartUpdate')}</button>
-      ) : (
-        <button onClick={onDownload} style={{
-          padding: '4px 12px', borderRadius: 4, border: 'none',
-          background: 'var(--accent)', color: '#fff', cursor: 'pointer', fontSize: 12
-        }}>{t('appUpdate.download')}</button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <span style={{ flex: 1 }}>
+          {isDownloaded ? t('appUpdate.ready', { version })
+            : isDownloading ? t('appUpdate.downloading', { percent: String(percent) })
+            : t('appUpdate.available', { version })}
+        </span>
+        {isDownloaded ? (
+          <button onClick={onInstall} style={{
+            padding: '4px 12px', borderRadius: 4, border: 'none',
+            background: 'var(--accent)', color: '#fff', cursor: 'pointer', fontSize: 12
+          }}>{t('appUpdate.restartUpdate')}</button>
+        ) : isDownloading ? null : (
+          <button onClick={onDownload} style={{
+            padding: '4px 12px', borderRadius: 4, border: 'none',
+            background: 'var(--accent)', color: '#fff', cursor: 'pointer', fontSize: 12
+          }}>{t('appUpdate.download')}</button>
+        )}
+        <span onClick={onDismiss} style={{ cursor: 'pointer', opacity: 0.5, fontSize: 16 }}>×</span>
+      </div>
+      {isDownloading && (
+        <div style={{ marginTop: 8, height: 4, borderRadius: 2, background: 'var(--bg-active)', overflow: 'hidden' }}>
+          <div style={{
+            height: '100%', borderRadius: 2, background: 'var(--accent)',
+            width: `${percent}%`, transition: 'width 0.3s'
+          }} />
+        </div>
       )}
-      <span onClick={onDismiss} style={{ cursor: 'pointer', opacity: 0.5, fontSize: 16 }}>×</span>
     </div>
   )
 }

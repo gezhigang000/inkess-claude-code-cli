@@ -98,6 +98,11 @@ export const zh: Record<TranslationKey, string> = {
   'settings.uploadingLogs': '上传中...',
   'settings.logsUploaded': '上传成功',
   'settings.logsUploadFailed': '上传失败',
+  'settings.checkUpdate': '检查更新',
+  'settings.checkingUpdate': '检查中...',
+  'settings.updateAvailable': '有新版本: v{version}',
+  'settings.updateNotAvailable': '已是最新版本',
+  'settings.updateError': '检查失败',
 
   // Welcome
   'welcome.openFolder': '打开工作目录',
@@ -153,6 +158,7 @@ export const zh: Record<TranslationKey, string> = {
 
   // StatusBar
   'statusbar.preventingSleep': '阻止休眠中',
+  'statusbar.offline': '网络不可用',
 
   // Close Tab
   'tab.pressAgainToClose': '再次点击关闭',
@@ -183,6 +189,8 @@ export const zh: Record<TranslationKey, string> = {
   // App Update
   'appUpdate.ready': 'v{version} 已准备好安装',
   'appUpdate.available': '应用更新 v{version} 可用',
+  'appUpdate.downloading': '正在下载更新... {percent}%',
   'appUpdate.restartUpdate': '重启并更新',
   'appUpdate.download': '下载',
+  'appUpdate.activeSessionWarning': '当前有活跃会话，请确保工作已保存。是否继续更新？',
 }

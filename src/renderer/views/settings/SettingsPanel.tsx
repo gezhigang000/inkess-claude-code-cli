@@ -324,10 +324,28 @@ function AboutSection() {
   const [appVersion, setAppVersion] = useState('')
   const [cliVersion, setCliVersion] = useState<string | null>(null)
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle')
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'not-available' | 'error'>('idle')
+  const [updateVersion, setUpdateVersion] = useState('')
 
   useEffect(() => {
     window.api.app.getVersion().then(setAppVersion)
     window.api.cli.getInfo().then(info => setCliVersion(info.version))
+
+    const unsub = window.api.appUpdate.onStatus((status) => {
+      if (status.type === 'available') {
+        setUpdateStatus('available')
+        setUpdateVersion(status.version || '')
+      } else if (status.type === 'not-available') {
+        setUpdateStatus('not-available')
+        setTimeout(() => setUpdateStatus('idle'), 3000)
+      } else if (status.type === 'error') {
+        setUpdateStatus('error')
+        setTimeout(() => setUpdateStatus('idle'), 3000)
+      } else if (status.type === 'checking') {
+        setUpdateStatus('checking')
+      }
+    })
+    return () => { unsub() }
   }, [])
 
   const handleUploadLogs = async () => {
@@ -353,6 +371,30 @@ function AboutSection() {
             <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Claude Code CLI</span>
             <span style={{ fontSize: 13, color: 'var(--text-primary)', fontFamily: 'var(--font-mono, monospace)' }}>{cliVersion ? `v${cliVersion}` : '—'}</span>
           </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
+          <button
+            onClick={() => window.api.appUpdate.check()}
+            disabled={updateStatus === 'checking'}
+            style={{
+              padding: '6px 14px', background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
+              border: '1px solid var(--border)', borderRadius: 6, fontSize: 12,
+              ...(updateStatus === 'checking' ? disabledBtnBase : { cursor: 'pointer' }),
+            }}
+          >
+            {updateStatus === 'checking' ? t('settings.checkingUpdate') : t('settings.checkUpdate')}
+          </button>
+          {updateStatus === 'available' && (
+            <span style={{ fontSize: 12, color: 'var(--accent)' }}>
+              {t('settings.updateAvailable').replace('{version}', updateVersion)}
+            </span>
+          )}
+          {updateStatus === 'not-available' && (
+            <span style={{ fontSize: 12, color: 'var(--success)' }}>{t('settings.updateNotAvailable')}</span>
+          )}
+          {updateStatus === 'error' && (
+            <span style={{ fontSize: 12, color: 'var(--error-text)' }}>{t('settings.updateError')}</span>
+          )}
         </div>
       </SettingsGroup>
       <ClearHistorySection />
