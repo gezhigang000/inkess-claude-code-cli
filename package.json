@@ -1,6 +1,6 @@
 {
   "name": "inkess-claude-code-cli",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Inkess Claude Code CLI — Zero-config Claude Code terminal for Inkess users",
   "author": "Inkess",
   "main": "./out/main/index.js",
