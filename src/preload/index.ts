@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import * as os from 'os'
 
 const api = {
@@ -118,6 +118,7 @@ const api = {
 
   fs: {
     isDirectory: (path: string) => ipcRenderer.invoke('fs:isDirectory', path) as Promise<boolean>,
+    getPathForFile: (file: File) => webUtils.getPathForFile(file),
   },
 
   shell: {

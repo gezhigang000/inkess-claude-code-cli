@@ -346,7 +346,7 @@ export function App() {
     if (files.length === 0) return
 
     for (const file of files) {
-      const filePath = (file as any).path as string
+      const filePath = window.api.fs.getPathForFile(file) || (file as any).path as string
       if (!filePath) {
         console.warn('[Drop] file.path is empty for:', file.name)
         continue
