@@ -54,6 +54,7 @@ export function App() {
   const [appUpdateStatus, setAppUpdateStatus] = useState<{
     type: string; version?: string; percent?: number
   } | null>(null)
+  const appUpdateDismissedRef = useRef(false)
   const { t } = useI18n()
 
   // Startup: check auth → check CLI
@@ -221,6 +222,9 @@ export function App() {
   useEffect(() => {
     const unsub = window.api.appUpdate.onStatus((status) => {
       if (status.type === 'available' || status.type === 'downloaded' || status.type === 'downloading') {
+        // Don't re-show if user dismissed (except for downloaded — always show "restart" prompt)
+        if (appUpdateDismissedRef.current && status.type !== 'downloaded') return
+        if (status.type === 'downloaded') appUpdateDismissedRef.current = false
         setAppUpdateStatus(status)
       }
     })
@@ -523,7 +527,7 @@ export function App() {
             }
             window.api.appUpdate.install()
           }}
-          onDismiss={() => setAppUpdateStatus(null)}
+          onDismiss={() => { appUpdateDismissedRef.current = true; setAppUpdateStatus(null) }}
         />
       )}
     </div>
