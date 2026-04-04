@@ -42,7 +42,13 @@ export class PtyOutputMonitor extends EventEmitter {
   /** Stop monitoring a PTY session */
   unwatch(id: string): void {
     const session = this.sessions.get(id)
-    if (session?.idleTimer) clearTimeout(session.idleTimer)
+    if (!session) return
+    if (session.idleTimer) clearTimeout(session.idleTimer)
+    // Emit idle if still streaming so sleep inhibitor can release
+    if (session.isStreaming) {
+      session.isStreaming = false
+      this.emit('activity', { id, type: 'prompt-idle' } as PtyActivityEvent)
+    }
     this.sessions.delete(id)
   }
 

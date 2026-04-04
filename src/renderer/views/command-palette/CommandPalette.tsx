@@ -123,7 +123,7 @@ export function CommandPalette({ onClose, onNewTab, onSettings, onToggleTheme, o
       onClick={onClose}
       style={{
         position: 'fixed', inset: 0, zIndex: 300,
-        background: 'rgba(0,0,0,0.4)',
+        background: 'rgba(0,0,0,0.35)',
         display: 'flex', justifyContent: 'center', paddingTop: 80,
         animation: 'fadeIn 0.15s ease-out',
       }}
@@ -133,7 +133,7 @@ export function CommandPalette({ onClose, onNewTab, onSettings, onToggleTheme, o
         style={{
           width: 480, maxHeight: 400, background: 'var(--bg-secondary)',
           borderRadius: 12, border: '1px solid var(--border)',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+          boxShadow: 'var(--shadow-overlay)',
           display: 'flex', flexDirection: 'column',
           animation: 'scaleIn 0.15s ease-out',
           alignSelf: 'flex-start',

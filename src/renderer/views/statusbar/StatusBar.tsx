@@ -44,11 +44,12 @@ export function StatusBar() {
     return () => { if (modeFlashTimerRef.current) clearTimeout(modeFlashTimerRef.current) }
   }, [])
 
-  // Fetch git branch for active tab
+  // Fetch git branch for active tab — capture ID to avoid race on rapid tab switches
   useEffect(() => {
     if (!activeTab?.cwd || !activeTab.id) return
+    const tabId = activeTab.id
     window.api.git.getBranch(activeTab.cwd).then((branch) => {
-      if (branch) updateTab(activeTab.id, { gitBranch: branch })
+      if (branch) updateTab(tabId, { gitBranch: branch })
     })
   }, [activeTab?.cwd, activeTab?.id])
 
@@ -182,7 +183,7 @@ export function StatusBar() {
                 padding: '0 8px', fontSize: 11, lineHeight: '18px',
                 cursor: isDisabled ? 'not-allowed' : 'pointer',
                 background: isFlashing ? 'var(--accent-hover)' : isActive ? 'var(--accent)' : 'transparent',
-                color: isActive ? '#fff' : 'var(--text-muted)',
+                color: isActive ? 'var(--accent-text)' : 'var(--text-muted)',
                 transition: 'background 0.2s, color 0.2s',
                 whiteSpace: 'nowrap',
               }}

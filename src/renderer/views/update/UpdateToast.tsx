@@ -14,14 +14,18 @@ export function UpdateToast({ currentVersion, latestVersion, onUpdate, onDismiss
 
   const handleUpdate = async () => {
     setUpdating(true)
-    onUpdate()
+    try {
+      await onUpdate()
+    } catch { /* ignore */ } finally {
+      setUpdating(false)
+    }
   }
 
   return (
     <div style={{
       width: 320, padding: 16, background: 'var(--bg-secondary)',
       border: '1px solid var(--border)', borderRadius: 10,
-      boxShadow: '0 8px 24px rgba(0,0,0,0.4)'
+      boxShadow: 'var(--shadow-overlay)'
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -42,7 +46,7 @@ export function UpdateToast({ currentVersion, latestVersion, onUpdate, onDismiss
           onClick={handleUpdate}
           disabled={updating}
           style={{
-            flex: 1, padding: '6px 0', background: 'var(--accent)', color: '#fff',
+            flex: 1, padding: '6px 0', background: 'var(--accent)', color: 'var(--accent-text)',
             border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 500,
             cursor: updating ? 'wait' : 'pointer'
           }}

@@ -4,6 +4,7 @@ import log from './logger'
 const API_BASE = 'https://llm.starapp.net'
 const FLUSH_INTERVAL = 60_000
 const QUEUE_LIMIT = 20
+const MAX_QUEUE_SIZE = 500
 
 interface AnalyticsEvent {
   event: string
@@ -25,6 +26,7 @@ export class Analytics {
   }
 
   track(event: string, props?: Record<string, unknown>): void {
+    if (this.queue.length >= MAX_QUEUE_SIZE) this.queue.shift()
     this.queue.push({ event, props, ts: Date.now() })
     if (this.queue.length >= QUEUE_LIMIT) {
       this.flush()

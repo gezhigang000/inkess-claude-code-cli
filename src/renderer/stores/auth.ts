@@ -23,6 +23,9 @@ export const useAuthStore = create<AuthState>((set) => ({
   balance: 0,
 
   setAuth: (loggedIn, user) => set({ loggedIn, user, balance: user?.balance ?? 0 }),
-  setBalance: (balance) => set({ balance }),
+  setBalance: (balance) => set((state) => ({
+    balance,
+    user: state.user ? { ...state.user, balance } : null,
+  })),
   logout: () => set({ loggedIn: false, user: null, balance: 0 })
 }))

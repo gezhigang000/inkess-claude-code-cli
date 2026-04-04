@@ -59,7 +59,7 @@ export function Sidebar({ onSettings, onOpenProject, onNewSession, onCommandPale
 
   const activeSessions: SessionRecord[] = useMemo(() => tabs.map(tab => ({
     id: tab.id, name: tab.title, cwd: tab.cwd,
-    createdAt: Date.now(), status: 'active' as const,
+    createdAt: tab.createdAt || Date.now(), status: 'active' as const,
   })), [tabs])
 
   const [closedSessions, setClosedSessions] = useState<SessionRecord[]>(
@@ -364,7 +364,7 @@ export function Sidebar({ onSettings, onOpenProject, onNewSession, onCommandPale
           <div style={{
             position: 'fixed', left: contextMenu.x, top: contextMenu.y, zIndex: 401,
             background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 6,
-            boxShadow: '0 4px 16px rgba(0,0,0,0.3)', padding: '4px 0', minWidth: 160,
+            boxShadow: 'var(--shadow-popover)', padding: '4px 0', minWidth: 160,
           }}>
             <div
               onClick={() => togglePin(contextMenu.cwd)}

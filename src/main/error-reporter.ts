@@ -44,7 +44,7 @@ export class ErrorReporter {
 
   /** Queue an error/warn for batch upload */
   report(message: string, stack?: string, source: 'main' | 'renderer' = 'main', level: 'error' | 'warn' | 'info' = 'error'): void {
-    if (this.queue.length >= MAX_QUEUE_SIZE) return // Drop oldest to prevent memory leak
+    if (this.queue.length >= MAX_QUEUE_SIZE) this.queue.shift() // Evict oldest to keep most recent
     this.queue.push({ level, message: message.slice(0, 2000), stack: stack?.slice(0, 4000), source, ts: Date.now() })
     if (this.queue.length >= QUEUE_LIMIT && !this.flushing) {
       this.flush()

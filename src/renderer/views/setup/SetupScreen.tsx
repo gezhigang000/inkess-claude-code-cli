@@ -78,7 +78,7 @@ export function SetupScreen() {
                   alignItems: 'center',
                   gap: 12,
                   padding: '10px 0',
-                  borderTop: i > 0 ? '1px solid rgba(58, 58, 85, 0.5)' : 'none',
+                  borderTop: i > 0 ? '1px solid var(--border)' : 'none',
                   fontSize: 13
                 }}
               >
@@ -93,7 +93,7 @@ export function SetupScreen() {
                     flexShrink: 0,
                     background:
                       step.status === 'done'
-                        ? 'rgba(56, 161, 105, 0.2)'
+                        ? 'var(--success-subtle)'
                         : step.status === 'active'
                           ? 'var(--accent-subtle)'
                           : 'var(--bg-tertiary)',
@@ -176,7 +176,7 @@ export function SetupScreen() {
               style={{
                 padding: '8px 20px',
                 background: 'var(--accent)',
-                color: '#fff',
+                color: 'var(--accent-text)',
                 border: 'none',
                 borderRadius: 6,
                 fontSize: 13,

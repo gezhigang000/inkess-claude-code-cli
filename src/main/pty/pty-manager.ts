@@ -7,6 +7,7 @@ interface PtySession {
   process: pty.IPty
   onDataCallbacks: ((data: string) => void)[]
   onExitCallbacks: ((exitCode: number) => void)[]
+  killed?: boolean
 }
 
 export class PtyManager {
@@ -49,7 +50,9 @@ export class PtyManager {
       })
 
       ptyProcess.onExit(({ exitCode }) => {
-        session.onExitCallbacks.forEach((cb) => cb(exitCode))
+        if (!session.killed) {
+          session.onExitCallbacks.forEach((cb) => cb(exitCode))
+        }
         session.onDataCallbacks = []
         session.onExitCallbacks = []
         this.sessions.delete(id)
@@ -78,7 +81,10 @@ export class PtyManager {
   }
 
   kill(id: string): void {
-    this.sessions.get(id)?.process.kill()
+    const session = this.sessions.get(id)
+    if (!session) return
+    session.killed = true
+    session.process.kill()
     this.sessions.delete(id)
   }
 

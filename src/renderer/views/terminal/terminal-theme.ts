@@ -34,19 +34,19 @@ export const LIGHT_THEME = {
   black: '#1A1A1A',
   red: '#C53030',
   green: '#2E8B57',
-  yellow: '#B8860B',
+  yellow: '#8B6914',          // Darkened for ~5.2:1 contrast on light bg
   blue: '#2563EB',
   magenta: '#7C3AED',
   cyan: '#0891B2',
-  white: '#F0EDE8',
-  brightBlack: '#999999',
+  white: '#6B6B6B',          // Darkened — was #F0EDE8 (invisible on light bg)
+  brightBlack: '#6B6B6B',   // Darkened from #777777 for safer contrast margin (~5.1:1)
   brightRed: '#E53E3E',
   brightGreen: '#38A169',
-  brightYellow: '#D69E2E',
+  brightYellow: '#7A5C0F',   // Darkened for ~6.1:1 contrast on light bg
   brightBlue: '#3B82F6',
   brightMagenta: '#8B5CF6',
   brightCyan: '#06B6D4',
-  brightWhite: '#FFFFFF'
+  brightWhite: '#999999'     // Darker — was #FFFFFF (invisible on light bg)
 }
 
 export function getTerminalTheme(): typeof DARK_THEME {

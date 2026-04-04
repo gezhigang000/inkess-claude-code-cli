@@ -23,6 +23,11 @@
   --ring: #C9A87C;
   --scrollbar-thumb: rgba(255, 255, 255, 0.1);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.18);
+  --accent-text: #FFFFFF;
+  --success-subtle: rgba(56, 161, 105, 0.2);
+  --shadow-overlay: 0 8px 24px rgba(0,0,0,0.4);
+  --shadow-popover: 0 4px 16px rgba(0,0,0,0.3);
+  --toggle-knob: #FFFFFF;
 
   /* Terminal theme */
   --terminal-bg: #191919;
@@ -53,6 +58,11 @@
   --ring: #7A6244;
   --scrollbar-thumb: rgba(0, 0, 0, 0.12);
   --scrollbar-thumb-hover: rgba(0, 0, 0, 0.2);
+  --accent-text: #FFFFFF;
+  --success-subtle: rgba(46, 139, 87, 0.12);
+  --shadow-overlay: 0 8px 24px rgba(0,0,0,0.12);
+  --shadow-popover: 0 4px 16px rgba(0,0,0,0.1);
+  --toggle-knob: #666666;
 
   /* Terminal theme (light) */
   --terminal-bg: #FAFAF8;

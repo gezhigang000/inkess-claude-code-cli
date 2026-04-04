@@ -7,6 +7,7 @@ type LanguageChoice = 'auto' | 'zh' | 'en'
 
 const VALID_THEMES: ThemeChoice[] = ['auto', 'dark', 'light']
 const VALID_LANGUAGES: LanguageChoice[] = ['auto', 'zh', 'en']
+const VALID_IDE_CHOICES = ['vscode', 'cursor', 'windsurf', 'zed']
 
 interface SettingsState {
   fontSize: number
@@ -69,7 +70,7 @@ const validatedFontSize = typeof saved.fontSize === 'number' && saved.fontSize >
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   fontSize: validatedFontSize,
-  ideChoice: saved.ideChoice ?? 'vscode',
+  ideChoice: VALID_IDE_CHOICES.includes((saved as any).ideChoice) ? (saved as any).ideChoice : 'vscode',
   language: validatedLanguage,
   theme: validatedTheme,
   notificationsEnabled: typeof (saved as any).notificationsEnabled === 'boolean' ? (saved as any).notificationsEnabled : true,

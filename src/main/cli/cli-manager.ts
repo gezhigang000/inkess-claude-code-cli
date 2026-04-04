@@ -11,7 +11,7 @@ import {
   renameSync,
   copyFileSync
 } from 'fs'
-import { execSync } from 'child_process'
+import { execSync, execFileSync } from 'child_process'
 import { pipeline } from 'stream/promises'
 import { Readable } from 'stream'
 import { createHash } from 'crypto'
@@ -94,7 +94,7 @@ export class CliManager {
     let version: string | null = null
     if (installed) {
       try {
-        const raw = execSync(`"${this.binaryPath}" --version`, {
+        const raw = execFileSync(this.binaryPath, ['--version'], {
           timeout: 5000,
           encoding: 'utf-8'
         }).trim()
@@ -214,7 +214,8 @@ export class CliManager {
           pct
         )
         controller.enqueue(value)
-      }
+      },
+      cancel() { reader.cancel().catch(() => {}) }
     })
 
     try {
@@ -263,7 +264,7 @@ export class CliManager {
     // macOS: clear quarantine attribute
     if (platform === 'darwin') {
       try {
-        execSync(`xattr -cr "${this.binaryPath}"`, { timeout: 5000 })
+        execFileSync('xattr', ['-cr', this.binaryPath], { timeout: 5000 })
         log.info('CLI: cleared quarantine attribute')
       } catch {
         log.warn('CLI: failed to clear quarantine attribute (non-fatal)')
@@ -273,7 +274,7 @@ export class CliManager {
     onProgress?.('Verifying installation...', 0.9)
 
     try {
-      execSync(`"${this.binaryPath}" --version`, { timeout: 10000 })
+      execFileSync(this.binaryPath, ['--version'], { timeout: 10000 })
     } catch (verifyErr) {
       log.error('CLI: binary verification failed:', verifyErr)
       if (existsSync(this.binaryPath)) {

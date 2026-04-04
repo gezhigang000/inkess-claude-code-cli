@@ -15,6 +15,11 @@ function safeFit(container: HTMLDivElement | null, fitAddon: FitAddon | null) {
   }
 }
 
+interface TerminalViewProps {
+  ptyId: string | null
+  isActive: boolean
+}
+
 interface PendingImage {
   path: string
   name: string
@@ -33,8 +38,8 @@ export function TerminalView({ ptyId, isActive }: TerminalViewProps) {
   const confirmImage = useCallback(() => {
     if (!pendingImage || !ptyId) return
     const normalized = pendingImage.path.replace(/\\/g, '/')
-    const quoted = normalized.includes(' ') ? `"${normalized}"` : normalized
-    window.api.pty.write(ptyId, quoted)
+    const escaped = `'${normalized.replace(/'/g, "'\\''")}'`
+    window.api.pty.write(ptyId, escaped)
     setPendingImage(null)
     termRef.current?.focus()
   }, [pendingImage, ptyId])
@@ -46,6 +51,7 @@ export function TerminalView({ ptyId, isActive }: TerminalViewProps) {
 
   useEffect(() => {
     if (!containerRef.current) return
+    let isMounted = true
 
     const term = new Terminal({
       theme: getTerminalTheme(),
@@ -92,14 +98,17 @@ export function TerminalView({ ptyId, isActive }: TerminalViewProps) {
       }
 
       if (event.type === 'keydown' && event.key === 'v') {
-        // Check for image in clipboard first
+        // Check for image in clipboard first (guard against unmount with isMounted)
         navigator.clipboard.read().then(async (items) => {
+          if (!isMounted) return
           for (const item of items) {
             const imageType = item.types.find(t => t.startsWith('image/'))
             if (imageType) {
               const blob = await item.getType(imageType)
               const buffer = await blob.arrayBuffer()
+              if (!isMounted) return
               const path = await window.api.clipboard.saveImage(buffer)
+              if (!isMounted) return
               const sizeKB = (buffer.byteLength / 1024).toFixed(0)
               const name = path.split('/').pop() || 'image.png'
               setPendingImage({ path, name, size: `${sizeKB} KB` })
@@ -108,11 +117,11 @@ export function TerminalView({ ptyId, isActive }: TerminalViewProps) {
           }
           // No image — fall back to text paste
           const text = await navigator.clipboard.readText()
-          if (ptyId && text) window.api.pty.write(ptyId, text)
+          if (isMounted && ptyId && text) window.api.pty.write(ptyId, text)
         }).catch(() => {
           // Fallback if clipboard.read() not supported
           navigator.clipboard.readText().then(text => {
-            if (ptyId && text) window.api.pty.write(ptyId, text)
+            if (isMounted && ptyId && text) window.api.pty.write(ptyId, text)
           })
         })
         return false
@@ -136,9 +145,12 @@ export function TerminalView({ ptyId, isActive }: TerminalViewProps) {
     })
 
     return () => {
+      isMounted = false
       disposable.dispose()
       try { removeDataListener?.() } catch { /* ignore */ }
       resizeObserver.disconnect()
+      fitAddonRef.current = null
+      try { fitAddon.dispose() } catch { /* ignore */ }
       term.dispose()
     }
   }, [ptyId])
@@ -198,7 +210,7 @@ export function TerminalView({ ptyId, isActive }: TerminalViewProps) {
             onClick={confirmImage}
             style={{
               padding: '4px 12px', borderRadius: 4, fontSize: 12, cursor: 'pointer',
-              background: 'var(--accent)', color: '#fff',
+              background: 'var(--accent)', color: 'var(--accent-text)',
             }}
           >
             {t('terminal.sendImage')}

@@ -30,7 +30,7 @@ const api = {
     getBalance: () => ipcRenderer.invoke('auth:getBalance') as Promise<{
       balance: number; error?: string
     }>,
-    getToken: () => ipcRenderer.invoke('auth:getToken') as Promise<string | null>,
+    hasToken: () => ipcRenderer.invoke('auth:hasToken') as Promise<boolean>,
     autoLogin: () => ipcRenderer.invoke('auth:autoLogin') as Promise<{
       success: boolean; user: { id: number; email: string; username: string; balance: number } | null
     }>

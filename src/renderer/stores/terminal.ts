@@ -5,6 +5,7 @@ export interface TerminalTab {
   ptyId: string | null
   title: string
   cwd: string
+  createdAt: number
   gitBranch?: string
   model?: string
   isRunning?: boolean
@@ -35,15 +36,18 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
 
   removeTab: (id) =>
     set((state) => {
+      const idx = state.tabs.findIndex((t) => t.id === id)
       const tabs = state.tabs.filter((t) => t.id !== id)
-      const activeTabId =
-        state.activeTabId === id
-          ? tabs[tabs.length - 1]?.id ?? null
-          : state.activeTabId
+      let activeTabId = state.activeTabId
+      if (state.activeTabId === id) {
+        // Prefer next tab at same position, fallback to previous
+        activeTabId = tabs[Math.min(idx, tabs.length - 1)]?.id ?? null
+      }
       return { tabs, activeTabId }
     }),
 
-  setActiveTab: (id) => set({ activeTabId: id }),
+  setActiveTab: (id) =>
+    set((state) => state.tabs.some((t) => t.id === id) ? { activeTabId: id } : {}),
 
   updateTab: (id, updates) =>
     set((state) => ({

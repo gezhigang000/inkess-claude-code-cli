@@ -25,11 +25,11 @@ export function useI18n() {
       let text = dict[key] || en[key] || key
       const allParams = { fileManager: FILE_MANAGER, ...params }
       for (const [k, v] of Object.entries(allParams)) {
-        text = text.replace(`{${k}}`, v)
+        text = text.replaceAll(`{${k}}`, v)
       }
       return text
     }
-  }, [dict])
+  }, [dict, resolved])
 
   return { t, language: resolved }
 }
@@ -43,7 +43,7 @@ export function getT() {
     let text = dict[key] || en[key] || key
     const allParams = { fileManager: FILE_MANAGER, ...params }
     for (const [k, v] of Object.entries(allParams)) {
-      text = text.replace(`{${k}}`, v)
+      text = text.replaceAll(`{${k}}`, v)
     }
     return text
   }

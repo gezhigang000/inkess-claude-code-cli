@@ -11,7 +11,8 @@ import { Analytics } from './analytics'
 import { ErrorReporter } from './error-reporter'
 import { SessionRecorder } from './session/session-recorder'
 import { SessionStore } from './session/session-store'
-import { mkdirSync, statSync, writeFileSync, readdirSync, unlinkSync } from 'fs'
+import { mkdirSync, statSync, writeFileSync, readdirSync, unlinkSync, existsSync } from 'fs'
+import { execFileSync } from 'child_process'
 
 process.on('uncaughtException', (err) => log.error('Uncaught:', err))
 process.on('unhandledRejection', (reason) => log.error('Unhandled:', reason))
@@ -143,8 +144,8 @@ ipcMain.handle('auth:getBalance', async () => {
   return authManager.getBalance()
 })
 
-ipcMain.handle('auth:getToken', () => {
-  return authManager.getToken()
+ipcMain.handle('auth:hasToken', () => {
+  return authManager.getToken() !== null
 })
 
 ipcMain.handle('auth:autoLogin', async () => {
@@ -231,7 +232,11 @@ ipcMain.handle('pty:create', (_event, options: {
     const toolsEnv = toolsManager.getEnvPatch()
     const claudeConfigDir = join(app.getPath('userData'), 'claude-config')
     mkdirSync(claudeConfigDir, { recursive: true })
-    const mergedEnv = { ...toolsEnv, ...options.env, CLAUDE_CONFIG_DIR: claudeConfigDir }
+    // Inject auth token from main process (never expose raw token to renderer)
+    const token = authManager.getToken()
+    const authEnv: Record<string, string> = token ? { ANTHROPIC_AUTH_TOKEN: token } : {}
+    // Security: toolsEnv PATH must win over renderer-supplied env, CLAUDE_CONFIG_DIR always forced
+    const mergedEnv = { ...options.env, ...authEnv, ...toolsEnv, CLAUDE_CONFIG_DIR: claudeConfigDir }
 
     const id = ptyManager.create(options.cwd, mergedEnv, command, args)
     ptyMonitor.watch(id)
@@ -260,6 +265,7 @@ ipcMain.handle('pty:create', (_event, options: {
 })
 
 ipcMain.on('pty:write', (_event, { id, data }: { id: string; data: string }) => {
+  if (typeof data !== 'string' || data.length > 1_048_576) return // 1MB limit
   ptyManager.write(id, data)
   sessionRecorder.recordInput(id, data)
 })
@@ -286,6 +292,7 @@ ipcMain.handle('fs:isDirectory', (_event, path: string) => {
 })
 
 ipcMain.handle('clipboard:saveImage', (_event, buffer: ArrayBuffer) => {
+  if (!buffer || buffer.byteLength > 50 * 1024 * 1024) return '' // 50MB limit
   const tmpDir = join(app.getPath('userData'), 'tmp')
   mkdirSync(tmpDir, { recursive: true })
   const now = new Date()
@@ -316,11 +323,12 @@ ipcMain.handle('shell:openExternal', (_event, url: string) => {
   return shell.openExternal(url)
 })
 
-ipcMain.handle('shell:openPath', (_event, path: string) => {
-  // Normalize and resolve to catch traversal attempts (e.g. /foo/../../etc/passwd)
-  const normalized = normalize(resolve(path))
-  if (normalized !== path && path.includes('..')) {
-    log.warn(`Blocked openPath with path traversal: ${path}`)
+ipcMain.handle('shell:openPath', (_event, rawPath: string) => {
+  const normalized = normalize(resolve(rawPath))
+  // Only allow opening paths within user's home directory
+  const home = app.getPath('home')
+  if (!normalized.startsWith(home + require('path').sep) && normalized !== home) {
+    log.warn(`Blocked openPath outside home directory: ${normalized}`)
     return
   }
   return shell.openPath(normalized)
@@ -372,6 +380,7 @@ ipcMain.handle('app:getVersion', () => {
 
 // IPC: Analytics (renderer → main)
 ipcMain.on('analytics:track', (_event, { event, props }: { event: string; props?: Record<string, unknown> }) => {
+  if (typeof event !== 'string' || event.length > 100) return
   analytics.track(event, props)
 })
 
@@ -430,11 +439,16 @@ ipcMain.on('power:setSleepInhibitorEnabled', (_event, enabled: boolean) => {
 // IPC: Git branch
 ipcMain.handle('git:getBranch', async (_event, cwd: string) => {
   try {
-    const { execSync } = require('child_process')
+    // Validate cwd is a real existing directory within home
+    const resolvedCwd = resolve(normalize(cwd))
+    const home = app.getPath('home')
+    if (!resolvedCwd.startsWith(home) || !existsSync(resolvedCwd)) return null
     // Use bundled tools PATH so git is found even without system git
     const toolsEnv = toolsManager.getEnvPatch()
-    const env = { ...process.env, ...toolsEnv }
-    const branch = execSync('git rev-parse --abbrev-ref HEAD', { cwd, encoding: 'utf-8', timeout: 3000, env }).trim()
+    const env = { ...process.env, ...toolsEnv, GIT_CONFIG_NOSYSTEM: '1' }
+    const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+      cwd: resolvedCwd, encoding: 'utf-8', timeout: 3000, env
+    }).trim()
     return branch || null
   } catch {
     return null

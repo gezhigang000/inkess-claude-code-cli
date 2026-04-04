@@ -122,9 +122,13 @@ export class AuthManager {
       const json = JSON.stringify(this.authData)
       if (this.useEncryption) {
         const encrypted = safeStorage.encryptString(json)
-        writeFileSync(this.encFile, encrypted)
+        const tmp = this.encFile + '.tmp'
+        writeFileSync(tmp, encrypted)
+        renameSync(tmp, this.encFile)
       } else {
-        writeFileSync(this.legacyFile, json, 'utf-8')
+        const tmp = this.legacyFile + '.tmp'
+        writeFileSync(tmp, json, 'utf-8')
+        renameSync(tmp, this.legacyFile)
       }
     }
   }
@@ -185,7 +189,7 @@ export class AuthManager {
     return this.authData?.token ?? null
   }
 
-  async login(login: string, password: string): Promise<{ success: boolean; error?: string }> {
+  async login(login: string, password: string): Promise<{ success: boolean; error?: string; errorCode?: string }> {
     try {
       log.info(`Auth: login attempt for ${login}`)
       const res = await fetchWithTimeout(`${API_BASE}/api/llm/desktop/login`, {
@@ -197,9 +201,9 @@ export class AuthManager {
       if (!res.ok) {
         const data = await res.json().catch(() => ({})) as { message?: string; errorCode?: string }
         if (data.errorCode === 'desktop_token_disabled') {
-          return { success: false, error: 'System token is disabled. Please enable it at llm.starapp.net → Console → Tokens' }
+          return { success: false, error: 'System token is disabled. Please enable it at llm.starapp.net → Console → Tokens', errorCode: data.errorCode }
         }
-        return { success: false, error: data.message || httpErrorMessage(res.status, 'Login') }
+        return { success: false, error: data.message || httpErrorMessage(res.status, 'Login'), errorCode: data.errorCode }
       }
 
       const data = await res.json() as { token: string; user: UserInfo }

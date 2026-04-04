@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
-import { useSettingsStore } from '../../stores/settings'
+import { useSettingsStore, resolveTheme } from '../../stores/settings'
 import { getTerminalTheme } from '../terminal/terminal-theme'
 import { useI18n } from '../../i18n'
 
@@ -167,6 +167,8 @@ export function SessionHistoryView({ onBack, onOpenInTerminal, initialSessionId 
 
     return () => {
       ro.disconnect()
+      try { searchAddon.dispose() } catch { /* ignore */ }
+      try { fitAddon.dispose() } catch { /* ignore */ }
       term.dispose()
       termRef.current = null
       fitAddonRef.current = null
@@ -189,9 +191,10 @@ export function SessionHistoryView({ onBack, onOpenInTerminal, initialSessionId 
     }
   }, [fontSize])
 
-  // Load session when selected
+  // Load session when selected — cancel on rapid switches to avoid interleaved output
   useEffect(() => {
     if (!selectedId || !termRef.current) return
+    let cancelled = false
 
     const term = termRef.current
     setLoading(true)
@@ -200,6 +203,7 @@ export function SessionHistoryView({ onBack, onOpenInTerminal, initialSessionId 
 
     window.api.session.read(selectedId)
       .then((chunks) => {
+        if (cancelled) return
         for (const chunk of chunks) {
           if (chunk.s === 'input') continue
           term.write(chunk.d)
@@ -207,7 +211,9 @@ export function SessionHistoryView({ onBack, onOpenInTerminal, initialSessionId 
         requestAnimationFrame(() => safeFit(termContainerRef.current, fitAddonRef.current))
       })
       .catch(() => {})
-      .finally(() => setLoading(false))
+      .finally(() => { if (!cancelled) setLoading(false) })
+
+    return () => { cancelled = true }
   }, [selectedId])
 
   const handleDelete = useCallback(async (id: string, e: React.MouseEvent) => {
@@ -477,7 +483,7 @@ export function SessionHistoryView({ onBack, onOpenInTerminal, initialSessionId 
                   background: accentColor,
                   border: 'none',
                   borderRadius: 6,
-                  color: isDark ? '#191919' : '#fff',
+                  color: 'var(--accent-text)',
                   fontSize: 12,
                   fontWeight: 600,
                   cursor: 'pointer',

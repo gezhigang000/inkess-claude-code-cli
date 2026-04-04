@@ -11,7 +11,7 @@ import {
   chmodSync,
   rmSync
 } from 'fs'
-import { execSync } from 'child_process'
+import { execSync, execFileSync } from 'child_process'
 import { pipeline } from 'stream/promises'
 import { Readable } from 'stream'
 import { createHash } from 'crypto'
@@ -59,9 +59,12 @@ function fetchWithTimeout(
   return run()
 }
 
-function sha256File(filePath: string): string {
-  const data = readFileSync(filePath)
-  return createHash('sha256').update(data).digest('hex')
+async function sha256File(filePath: string): Promise<string> {
+  const { createReadStream } = await import('fs')
+  const hash = createHash('sha256')
+  const stream = createReadStream(filePath)
+  for await (const chunk of stream) hash.update(chunk)
+  return hash.digest('hex')
 }
 
 export class ToolsManager {
@@ -104,7 +107,7 @@ export class ToolsManager {
       let version: string | null = null
       if (installed) {
         try {
-          const raw = execSync(`"${binPath}" ${def.verifyCommand.join(' ')}`, {
+          const raw = execFileSync(binPath, def.verifyCommand, {
             timeout: 5000,
             encoding: 'utf-8'
           }).trim()
@@ -128,8 +131,17 @@ export class ToolsManager {
 
   /** Check if all required tools are installed */
   isAllInstalled(): boolean {
-    // Fast path: marker file written after successful install
-    if (existsSync(this.markerPath)) return true
+    // Fast path: marker file written after successful install, but verify binaries still exist
+    if (existsSync(this.markerPath)) {
+      const required = this.getRequiredTools()
+      const allPresent = required.every(def => {
+        const binPath = this.getBinPath(def)
+        return !binPath || existsSync(binPath)
+      })
+      if (allPresent) return true
+      // Stale marker — binaries deleted, remove marker and fall through
+      try { unlinkSync(this.markerPath) } catch { /* ignore */ }
+    }
 
     const required = this.getRequiredTools()
     const missing: string[] = []
@@ -271,15 +283,21 @@ export class ToolsManager {
           pct
         )
         controller.enqueue(value)
-      }
+      },
+      cancel() { reader.cancel().catch(() => {}) }
     })
 
     const fileStream = createWriteStream(tmpPath)
-    await pipeline(Readable.fromWeb(progressStream as any), fileStream)
+    try {
+      await pipeline(Readable.fromWeb(progressStream as any), fileStream)
+    } catch (err) {
+      try { unlinkSync(tmpPath) } catch { /* ignore */ }
+      throw err
+    }
 
     // Verify checksum
     onProgress(`Verifying ${def.displayName}...`, 0.72)
-    const actual = sha256File(tmpPath)
+    const actual = await sha256File(tmpPath)
     if (actual !== platInfo.checksum) {
       unlinkSync(tmpPath)
       throw new Error(
@@ -303,32 +321,35 @@ export class ToolsManager {
       rmSync(oldToolDir, { recursive: true, force: true })
     }
 
-    if (archiveExt === '.zip') {
-      // Use system unzip (available on Windows via PowerShell and macOS)
-      if (os.platform() === 'win32') {
-        // PowerShell Expand-Archive only accepts .zip extension — rename first
-        const zipPath = tmpPath.replace(/\.tmp$/, '')
-        renameSync(tmpPath, zipPath)
-        try {
+    let cleanupPath = tmpPath
+    try {
+      if (archiveExt === '.zip') {
+        if (os.platform() === 'win32') {
+          // PowerShell Expand-Archive only accepts .zip extension — rename first
+          const zipPath = tmpPath.replace(/\.tmp$/, '')
+          renameSync(tmpPath, zipPath)
+          cleanupPath = zipPath
           execSync(
-            `powershell -NoProfile -Command "Expand-Archive -Force -Path '${zipPath}' -DestinationPath '${extractDir}'"`,
+            `powershell -NoProfile -Command "Expand-Archive -Force -LiteralPath '${zipPath}' -DestinationPath '${extractDir}'"`,
             { timeout: 300000 }
           )
-        } finally {
-          if (existsSync(zipPath)) unlinkSync(zipPath)
+        } else {
+          execFileSync('unzip', ['-o', '-q', tmpPath, '-d', extractDir], { timeout: 120000 })
         }
       } else {
-        execSync(`unzip -o -q "${tmpPath}" -d "${extractDir}"`, {
-          timeout: 120000
-        })
-        unlinkSync(tmpPath)
+        // tar.gz — validate entries for zip-slip before extracting
+        const entries = execFileSync('tar', ['-tzf', tmpPath], { timeout: 30000, encoding: 'utf-8' })
+        for (const entry of entries.split('\n').filter(Boolean)) {
+          if (entry.includes('..')) throw new Error(`Tar entry path traversal detected: ${entry}`)
+        }
+        execFileSync('tar', ['-xzf', tmpPath, '-C', extractDir], { timeout: 120000 })
       }
-    } else {
-      // tar.gz
-      execSync(`tar -xzf "${tmpPath}" -C "${extractDir}"`, {
-        timeout: 120000
-      })
-      unlinkSync(tmpPath)
+    } finally {
+      try { if (existsSync(cleanupPath)) unlinkSync(cleanupPath) } catch { /* ignore */ }
+      // Also clean up the original tmpPath if it was renamed
+      if (cleanupPath !== tmpPath) {
+        try { if (existsSync(tmpPath)) unlinkSync(tmpPath) } catch { /* ignore */ }
+      }
     }
 
     // Set executable permission on unix
@@ -344,7 +365,7 @@ export class ToolsManager {
       const postInstall = join(this.toolsDir, 'git', 'post-install.bat')
       if (existsSync(postInstall)) {
         try {
-          execSync(`"${postInstall}"`, {
+          execFileSync(postInstall, [], {
             cwd: join(this.toolsDir, 'git'),
             timeout: 30000,
             windowsHide: true
@@ -360,7 +381,7 @@ export class ToolsManager {
     if (os.platform() === 'darwin') {
       const toolDir = join(this.toolsDir, def.name)
       try {
-        execSync(`xattr -cr "${toolDir}"`, { timeout: 10000 })
+        execFileSync('xattr', ['-cr', toolDir], { timeout: 10000 })
         log.info(`Tools: cleared quarantine for ${def.name}`)
       } catch {
         log.warn(`Tools: failed to clear quarantine for ${def.name} (non-fatal)`)
@@ -372,7 +393,7 @@ export class ToolsManager {
     const binPath = this.getBinPath(def)
     if (binPath) {
       try {
-        execSync(`"${binPath}" ${def.verifyCommand.join(' ')}`, {
+        execFileSync(binPath, def.verifyCommand, {
           timeout: 10000,
           cwd: join(this.toolsDir, def.name)
         })

@@ -6,7 +6,9 @@ import type { SessionMeta } from './session-recorder'
 
 const INDEX_FILE = 'index.json'
 const MAX_STORAGE_BYTES = 500 * 1024 * 1024 // 500MB
+const MAX_QUERY_LENGTH = 500
 const ANSI_REGEX = /\x1B\[[0-9;]*[A-Za-z]/g
+const VALID_SESSION_ID = /^[a-zA-Z0-9_-]{1,128}$/
 
 export class SessionStore {
   private sessionsDir: string
@@ -15,6 +17,16 @@ export class SessionStore {
   constructor(sessionsDir: string) {
     this.sessionsDir = sessionsDir
     this.index = this.loadIndex()
+    this.enforceStorageLimit()
+    this.saveIndex()
+  }
+
+  /** Validate session ID and return safe file path, or null if invalid */
+  private safeSessionPath(id: string): string | null {
+    if (!VALID_SESSION_ID.test(id)) return null
+    const resolved = path.resolve(this.sessionsDir, `${id}.jsonl`)
+    if (!resolved.startsWith(path.resolve(this.sessionsDir) + path.sep)) return null
+    return resolved
   }
 
   private indexPath(): string {
@@ -31,11 +43,14 @@ export class SessionStore {
   }
 
   private saveIndex(): void {
+    const tmp = this.indexPath() + '.tmp'
     try {
       fs.mkdirSync(this.sessionsDir, { recursive: true })
-      fs.writeFileSync(this.indexPath(), JSON.stringify(this.index), 'utf-8')
+      fs.writeFileSync(tmp, JSON.stringify(this.index), 'utf-8')
+      fs.renameSync(tmp, this.indexPath())
     } catch (err) {
       log.error('[SessionStore] Failed to save index:', err)
+      try { fs.unlinkSync(tmp) } catch { /* ignore */ }
     }
   }
 
@@ -49,13 +64,15 @@ export class SessionStore {
       const oldest = this.index[this.index.length - 1]
       totalSize -= oldest.size ?? 0
       this.index.pop()
-      try {
-        const filePath = path.join(this.sessionsDir, `${oldest.id}.jsonl`)
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath)
+      const filePath = this.safeSessionPath(oldest.id)
+      if (filePath) {
+        try {
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath)
+          }
+        } catch (err) {
+          log.warn('[SessionStore] Failed to delete old session file:', err)
         }
-      } catch (err) {
-        log.warn('[SessionStore] Failed to delete old session file:', err)
       }
     }
   }
@@ -78,8 +95,8 @@ export class SessionStore {
   }
 
   async readSession(id: string): Promise<Array<{ t: number; d: string; s?: string }>> {
-    const filePath = path.join(this.sessionsDir, `${id}.jsonl`)
-    if (!fs.existsSync(filePath)) {
+    const filePath = this.safeSessionPath(id)
+    if (!filePath || !fs.existsSync(filePath)) {
       return []
     }
 
@@ -103,10 +120,11 @@ export class SessionStore {
   }
 
   deleteSession(id: string): void {
+    const filePath = this.safeSessionPath(id)
+    if (!filePath) return
     this.index = this.index.filter((m) => m.id !== id)
     this.saveIndex()
     try {
-      const filePath = path.join(this.sessionsDir, `${id}.jsonl`)
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath)
       }
@@ -117,8 +135,9 @@ export class SessionStore {
 
   clearAll(): void {
     for (const meta of this.index) {
+      const filePath = this.safeSessionPath(meta.id)
+      if (!filePath) continue
       try {
-        const filePath = path.join(this.sessionsDir, `${meta.id}.jsonl`)
         if (fs.existsSync(filePath)) {
           fs.unlinkSync(filePath)
         }
@@ -131,6 +150,7 @@ export class SessionStore {
   }
 
   async searchSessions(query: string): Promise<Array<{ id: string; matches: number }>> {
+    if (!query || query.length > MAX_QUERY_LENGTH) return []
     const lowerQuery = query.toLowerCase()
     const results: Array<{ id: string; matches: number }> = []
 

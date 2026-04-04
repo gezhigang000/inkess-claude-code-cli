@@ -37,13 +37,13 @@ export class ErrorBoundary extends Component<Props, State> {
             Something went wrong
           </div>
           <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 24, maxWidth: 500, textAlign: 'center' }}>
-            {this.state.error?.message || 'An unexpected error occurred'}
+            An unexpected error occurred. The error has been logged.
           </div>
           <button
             onClick={() => window.location.reload()}
             style={{
               padding: '10px 24px', borderRadius: 6, border: 'none',
-              background: 'var(--accent)', color: '#fff', cursor: 'pointer',
+              background: 'var(--accent)', color: 'var(--accent-text)', cursor: 'pointer',
               fontSize: 14, fontWeight: 500
             }}
           >

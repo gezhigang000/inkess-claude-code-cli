@@ -45,6 +45,7 @@ export function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [pendingCloseTabId, setPendingCloseTabId] = useState<string | null>(null)
   const [showCommandPalette, setShowCommandPalette] = useState(false)
+  const closeCommandPalette = useCallback(() => setShowCommandPalette(false), [])
   const [showHistory, setShowHistory] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const dragCounterRef = useRef(0)
@@ -121,13 +122,11 @@ export function App() {
   const handleNewTab = useCallback(async (cwd?: string) => {
     const targetCwd = cwd || (tabs.length > 0 ? tabs[tabs.length - 1].cwd : DEFAULT_CWD)
     const cliInfo = await window.api.cli.getInfo()
-    const token = await window.api.auth.getToken()
 
     const result = await window.api.pty.create({
       cwd: targetCwd,
       launchClaude: cliInfo.installed,
       env: {
-        ...(token ? { ANTHROPIC_AUTH_TOKEN: token } : {}),
         ANTHROPIC_BASE_URL: 'https://llm.starapp.net/api/llm'
       }
     })
@@ -136,7 +135,7 @@ export function App() {
 
     const id = crypto.randomUUID()
     const title = pathBasename(targetCwd)
-    addTab({ id, ptyId: result.id, title, cwd: targetCwd })
+    addTab({ id, ptyId: result.id, title, cwd: targetCwd, createdAt: Date.now() })
 
     // Persist to recent projects
     saveRecentProject(targetCwd)
@@ -144,9 +143,11 @@ export function App() {
 
   const handleCloseTab = useCallback(
     (tabId: string) => {
-      const tab = tabs.find((t) => t.id === tabId)
+      // Read latest tabs from store to avoid stale closure
+      const currentTabs = useTerminalStore.getState().tabs
+      const tab = currentTabs.find((t) => t.id === tabId)
       // If PTY already exited or only one tab, close immediately
-      if (tab?.isExited || tabs.length <= 1) {
+      if (tab?.isExited || currentTabs.length <= 1) {
         if (tab?.ptyId) window.api.pty.kill(tab.ptyId)
         removeTab(tabId)
         setPendingCloseTabId(null)
@@ -357,14 +358,14 @@ export function App() {
         console.warn('[Drop] isDir=true, creating new tab')
         handleNewTab(filePath)
       } else {
-        // Insert file path into active PTY (normalize backslashes for Git Bash on Windows)
+        // Insert file path into active PTY — use single-quote escaping for shell safety
         const store = useTerminalStore.getState()
         const tab = store.tabs.find(t => t.id === store.activeTabId)
         if (tab?.ptyId) {
           const normalized = filePath.replace(/\\/g, '/')
-          const quoted = normalized.includes(' ') ? `"${normalized}"` : normalized
-          console.warn('[Drop] writing to PTY:', quoted)
-          window.api.pty.write(tab.ptyId, quoted + ' ')
+          const escaped = `'${normalized.replace(/'/g, "'\\''")}'`
+          console.warn('[Drop] writing to PTY:', escaped)
+          window.api.pty.write(tab.ptyId, escaped + ' ')
         } else {
           console.warn('[Drop] no active PTY, cannot insert path')
         }
@@ -487,7 +488,7 @@ export function App() {
       {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} onLogout={handleLogout} />}
       {showCommandPalette && (
         <CommandPalette
-          onClose={() => setShowCommandPalette(false)}
+          onClose={closeCommandPalette}
           onNewTab={handleSelectDirectory}
           onSettings={() => { setShowCommandPalette(false); setShowSettings(true) }}
           onToggleTheme={() => {
@@ -700,7 +701,7 @@ function TitleTabBar({ tabs, activeTabId, onSelect, onClose, onNew, pendingClose
               title={title}
               style={{
                 width: 40, height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', color: id === 'close' && hoveredBtn === 'close' ? '#fff' : 'var(--text-muted)',
+                cursor: 'pointer', color: id === 'close' && hoveredBtn === 'close' ? '#fff' : 'var(--text-secondary)',
                 background: hoveredBtn === id ? (id === 'close' ? '#e81123' : 'var(--bg-hover)') : 'transparent',
                 transition: 'background 0.12s, color 0.12s',
               }}
@@ -772,7 +773,7 @@ function TabContextMenu({ tab, x, y, onClose, onDismiss }: {
         position: 'fixed', left: x, top: y, zIndex: 9999,
         background: 'var(--bg-secondary)', border: '1px solid var(--border)',
         borderRadius: 6, padding: '4px 0', minWidth: 180,
-        boxShadow: '0 4px 16px rgba(0,0,0,0.4)', fontSize: 13
+        boxShadow: 'var(--shadow-popover)', fontSize: 13
       }}
       onClick={(e) => e.stopPropagation()}
     >
@@ -950,7 +951,7 @@ function AppUpdateToast({ status, bottomOffset, onDownload, onInstall, onDismiss
       position: 'fixed', bottom: bottomOffset ?? 16, right: 16, background: 'var(--bg-secondary)',
       border: '1px solid var(--border)', borderRadius: 8, padding: '12px 16px',
       minWidth: 280, fontSize: 13, color: 'var(--text-primary)',
-      boxShadow: '0 4px 12px rgba(0,0,0,0.3)', zIndex: 1000
+      boxShadow: 'var(--shadow-popover)', zIndex: 1000
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <span style={{ flex: 1 }}>
@@ -961,12 +962,12 @@ function AppUpdateToast({ status, bottomOffset, onDownload, onInstall, onDismiss
         {isDownloaded ? (
           <button onClick={onInstall} style={{
             padding: '4px 12px', borderRadius: 4, border: 'none',
-            background: 'var(--accent)', color: '#fff', cursor: 'pointer', fontSize: 12
+            background: 'var(--accent)', color: 'var(--accent-text)', cursor: 'pointer', fontSize: 12
           }}>{t('appUpdate.restartUpdate')}</button>
         ) : isDownloading ? null : (
           <button onClick={onDownload} style={{
             padding: '4px 12px', borderRadius: 4, border: 'none',
-            background: 'var(--accent)', color: '#fff', cursor: 'pointer', fontSize: 12
+            background: 'var(--accent)', color: 'var(--accent-text)', cursor: 'pointer', fontSize: 12
           }}>{t('appUpdate.download')}</button>
         )}
         <span onClick={onDismiss} style={{ cursor: 'pointer', opacity: 0.5, fontSize: 16 }}>×</span>

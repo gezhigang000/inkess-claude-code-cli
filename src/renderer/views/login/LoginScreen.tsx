@@ -10,6 +10,7 @@ type Tab = 'login' | 'register'
 export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   const [tab, setTab] = useState<Tab>('login')
   const [error, setError] = useState<string | null>(null)
+  const [errorCode, setErrorCode] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const { t } = useI18n()
 
@@ -34,12 +35,13 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           {(['login', 'register'] as Tab[]).map(tb => (
             <button
               key={tb}
-              onClick={() => { setTab(tb); setError(null); setSuccess(null) }}
+              onClick={() => { setTab(tb); setError(null); setErrorCode(null); setSuccess(null) }}
               style={{
-                flex: 1, padding: '8px 0', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 500, cursor: 'pointer',
+                flex: 1, padding: '8px 0', borderRadius: 6, fontSize: 13, fontWeight: 500, cursor: 'pointer',
                 background: tab === tb ? 'var(--bg-primary)' : 'transparent',
                 color: tab === tb ? 'var(--text-primary)' : 'var(--text-muted)',
-                boxShadow: tab === tb ? '0 1px 3px rgba(0,0,0,0.2)' : 'none'
+                boxShadow: tab === tb ? '0 1px 3px rgba(0,0,0,0.15)' : 'none',
+                border: tab === tb ? '1px solid var(--border)' : '1px solid transparent'
               }}
             >
               {tb === 'login' ? t('login.signIn') : t('login.register')}
@@ -50,7 +52,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         {error && (
           <div style={{ fontSize: 13, color: 'var(--error-text)', marginBottom: 12, textAlign: 'center' }}>
             {error}
-            {error.includes('token is disabled') && (
+            {errorCode === 'desktop_token_disabled' && (
               <div style={{ marginTop: 8 }}>
                 <a
                   href="#"
@@ -66,7 +68,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         {success && <div style={{ fontSize: 13, color: 'var(--success)', marginBottom: 12, textAlign: 'center' }}>{success}</div>}
 
         {tab === 'login' ? (
-          <LoginForm onSuccess={onLoginSuccess} onError={setError} />
+          <LoginForm onSuccess={onLoginSuccess} onError={setError} onErrorCode={setErrorCode} />
         ) : (
           <RegisterForm onSuccess={onLoginSuccess} onError={setError} onMessage={setSuccess} />
         )}
@@ -98,7 +100,7 @@ function FocusInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   )
 }
 
-function LoginForm({ onSuccess, onError }: { onSuccess: () => void; onError: (e: string) => void }) {
+function LoginForm({ onSuccess, onError, onErrorCode }: { onSuccess: () => void; onError: (e: string) => void; onErrorCode?: (code: string | null) => void }) {
   const [login, setLogin] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -110,12 +112,14 @@ function LoginForm({ onSuccess, onError }: { onSuccess: () => void; onError: (e:
     if (!login || !password) return
     setLoading(true)
     onError('')
+    onErrorCode?.(null)
     try {
-      const result = await window.api.auth.login(login, password)
+      const result = await window.api.auth.login(login, password) as { success: boolean; error?: string; errorCode?: string }
       if (result.success) {
         onSuccess()
       } else {
         onError(result.error || t('login.loginFailed'))
+        if (result.errorCode) onErrorCode?.(result.errorCode)
       }
     } catch {
       onError(t('login.loginFailed'))
@@ -156,7 +160,7 @@ function LoginForm({ onSuccess, onError }: { onSuccess: () => void; onError: (e:
         type="submit" disabled={disabled}
         style={{
           width: '100%', padding: '10px 0', background: loading ? 'var(--accent-hover)' : 'var(--accent)',
-          color: '#fff', border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 500,
+          color: 'var(--accent-text)', border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 500,
           ...(disabled ? { cursor: 'not-allowed', opacity: 0.5 } : { cursor: 'pointer' }),
         }}
       >
@@ -311,7 +315,7 @@ function RegisterForm({ onSuccess, onError, onMessage }: {
         type="submit" disabled={disabled}
         style={{
           width: '100%', padding: '10px 0', background: loading ? 'var(--accent-hover)' : 'var(--accent)',
-          color: '#fff', border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 500,
+          color: 'var(--accent-text)', border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 500,
           ...(disabled ? { cursor: 'not-allowed', opacity: 0.5 } : { cursor: 'pointer' }),
         }}
       >

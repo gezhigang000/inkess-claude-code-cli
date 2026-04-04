@@ -39,7 +39,7 @@ export function SettingsPanel({ onClose, onLogout }: SettingsPanelProps) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex' }}>
-      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)' }} />
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)' }} />
       <div style={{
         position: 'relative', margin: 'auto', width: 640, height: 480,
         background: 'var(--bg-primary)', borderRadius: 12, border: '1px solid var(--border)',
@@ -156,7 +156,7 @@ function BillingSection({ balance }: { balance: number }) {
         </div>
         <button
           onClick={() => window.api.shell.openExternal('https://llm.starapp.net/zh/console/topup')}
-          style={{ marginTop: 12, padding: '8px 20px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, cursor: 'pointer' }}
+          style={{ marginTop: 12, padding: '8px 20px', background: 'var(--accent)', color: 'var(--accent-text)', border: 'none', borderRadius: 6, fontSize: 13, cursor: 'pointer' }}
         >
           {t('settings.topUp')}
         </button>
@@ -209,7 +209,7 @@ function ChangePasswordSection() {
           onClick={handleSubmit}
           disabled={disabled}
           style={{
-            alignSelf: 'flex-start', padding: '6px 14px', background: 'var(--accent)', color: '#fff',
+            alignSelf: 'flex-start', padding: '6px 14px', background: 'var(--accent)', color: 'var(--accent-text)',
             border: 'none', borderRadius: 6, fontSize: 12,
             ...(disabled ? disabledBtnBase : { cursor: 'pointer' }),
           }}
@@ -331,21 +331,22 @@ function AboutSection() {
     window.api.app.getVersion().then(setAppVersion)
     window.api.cli.getInfo().then(info => setCliVersion(info.version))
 
+    const timers: ReturnType<typeof setTimeout>[] = []
     const unsub = window.api.appUpdate.onStatus((status) => {
       if (status.type === 'available') {
         setUpdateStatus('available')
         setUpdateVersion(status.version || '')
       } else if (status.type === 'not-available') {
         setUpdateStatus('not-available')
-        setTimeout(() => setUpdateStatus('idle'), 3000)
+        timers.push(setTimeout(() => setUpdateStatus('idle'), 3000))
       } else if (status.type === 'error') {
         setUpdateStatus('error')
-        setTimeout(() => setUpdateStatus('idle'), 3000)
+        timers.push(setTimeout(() => setUpdateStatus('idle'), 3000))
       } else if (status.type === 'checking') {
         setUpdateStatus('checking')
       }
     })
-    return () => { unsub() }
+    return () => { unsub(); timers.forEach(clearTimeout) }
   }, [])
 
   const handleUploadLogs = async () => {
@@ -497,7 +498,7 @@ function ToggleRow({ label, checked, onChange }: { label: string; checked: boole
         }}
       >
         <div style={{
-          width: 18, height: 18, borderRadius: '50%', background: '#fff',
+          width: 18, height: 18, borderRadius: '50%', background: checked ? '#fff' : 'var(--toggle-knob)',
           position: 'absolute', top: 2,
           left: checked ? 20 : 2,
           transition: 'left 0.2s',
