@@ -353,13 +353,13 @@ export function App() {
     for (const file of files) {
       const filePath = window.api.fs.getPathForFile(file) || (file as any).path as string
       if (!filePath) {
-        console.warn('[Drop] file.path is empty for:', file.name)
+        console.log('[Drop] file.path is empty for:', file.name)
         continue
       }
-      console.warn('[Drop] file.path:', filePath)
+      console.log('[Drop] file.path:', filePath)
       const isDir = await window.api.fs.isDirectory(filePath)
       if (isDir) {
-        console.warn('[Drop] isDir=true, creating new tab')
+        console.log('[Drop] isDir=true, creating new tab')
         handleNewTab(filePath)
       } else {
         // Insert file path into active PTY — use single-quote escaping for shell safety
@@ -368,10 +368,10 @@ export function App() {
         if (tab?.ptyId) {
           const normalized = filePath.replace(/\\/g, '/')
           const escaped = `'${normalized.replace(/'/g, "'\\''")}'`
-          console.warn('[Drop] writing to PTY:', escaped)
+          console.log('[Drop] writing to PTY:', escaped)
           window.api.pty.write(tab.ptyId, escaped + ' ')
         } else {
-          console.warn('[Drop] no active PTY, cannot insert path')
+          console.log('[Drop] no active PTY, cannot insert path')
         }
       }
     }
