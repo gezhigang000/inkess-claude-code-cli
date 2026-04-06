@@ -1,6 +1,6 @@
 import log from './logger'
 import { app, BrowserWindow, ipcMain, shell, dialog, Menu, session, nativeImage, clipboard, Notification, powerSaveBlocker } from 'electron'
-import { join, resolve, normalize } from 'path'
+import { join, resolve, normalize, sep } from 'path'
 import { PtyManager } from './pty/pty-manager'
 import { PtyOutputMonitor, type PtyActivityEvent } from './pty/pty-output-monitor'
 import { CliManager } from './cli/cli-manager'
@@ -267,7 +267,7 @@ ipcMain.handle('pty:create', (_event, options: {
 ipcMain.on('pty:write', (_event, { id, data }: { id: string; data: string }) => {
   if (typeof data !== 'string' || data.length > 1_048_576) return // 1MB limit
   ptyManager.write(id, data)
-  sessionRecorder.recordInput(id, data)
+  // Do NOT record keystrokes — they may contain passwords and sensitive input
 })
 
 ipcMain.on('pty:resize', (_event, { id, cols, rows }: { id: string; cols: number; rows: number }) => {
@@ -327,7 +327,7 @@ ipcMain.handle('shell:openPath', (_event, rawPath: string) => {
   const normalized = normalize(resolve(rawPath))
   // Only allow opening paths within user's home directory
   const home = app.getPath('home')
-  if (!normalized.startsWith(home + require('path').sep) && normalized !== home) {
+  if (!normalized.startsWith(home + sep) && normalized !== home) {
     log.warn(`Blocked openPath outside home directory: ${normalized}`)
     return
   }
@@ -442,7 +442,7 @@ ipcMain.handle('git:getBranch', async (_event, cwd: string) => {
     // Validate cwd is a real existing directory within home
     const resolvedCwd = resolve(normalize(cwd))
     const home = app.getPath('home')
-    if (!resolvedCwd.startsWith(home) || !existsSync(resolvedCwd)) return null
+    if ((!resolvedCwd.startsWith(home + sep) && resolvedCwd !== home) || !existsSync(resolvedCwd)) return null
     // Use bundled tools PATH so git is found even without system git
     const toolsEnv = toolsManager.getEnvPatch()
     const env = { ...process.env, ...toolsEnv, GIT_CONFIG_NOSYSTEM: '1' }

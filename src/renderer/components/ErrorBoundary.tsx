@@ -19,9 +19,9 @@ export class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error }
   }
 
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('ErrorBoundary caught:', error, errorInfo)
-    window.api?.log.error(error.message, error.stack)
+  componentDidCatch(error: Error, _errorInfo: React.ErrorInfo) {
+    // Report via dedicated IPC only — do NOT use console.error (it would double-report via intercept)
+    window.api?.log.error(`ErrorBoundary caught: ${error.message}`, error.stack)
   }
 
   render() {

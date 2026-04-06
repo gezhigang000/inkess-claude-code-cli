@@ -10,6 +10,21 @@ interface PtySession {
   killed?: boolean
 }
 
+// Dangerous env keys that must never be passed from renderer to PTY
+const BLOCKED_ENV_KEYS = new Set([
+  'LD_PRELOAD', 'LD_LIBRARY_PATH',
+  'DYLD_INSERT_LIBRARIES', 'DYLD_LIBRARY_PATH', 'DYLD_FRAMEWORK_PATH',
+  'NODE_OPTIONS', 'ELECTRON_RUN_AS_NODE',
+])
+
+function sanitizeEnv(env: Record<string, string>): Record<string, string> {
+  const result: Record<string, string> = {}
+  for (const [key, value] of Object.entries(env)) {
+    if (!BLOCKED_ENV_KEYS.has(key)) result[key] = value
+  }
+  return result
+}
+
 export class PtyManager {
   private sessions = new Map<string, PtySession>()
 
@@ -19,6 +34,7 @@ export class PtyManager {
     const shell = command || (isWin ? 'powershell.exe' : process.env.SHELL || '/bin/zsh')
 
     try {
+      const safeEnv = env ? sanitizeEnv(env) : {}
       const ptyProcess = pty.spawn(shell, args || [], {
         name: 'xterm-256color',
         cols: 120,
@@ -26,7 +42,7 @@ export class PtyManager {
         cwd,
         env: {
           ...process.env,
-          ...env,
+          ...safeEnv,
           TERM: 'xterm-256color',
           COLORTERM: 'truecolor',
           // Force UTF-8 on Windows to avoid GBK encoding issues
@@ -84,6 +100,8 @@ export class PtyManager {
     const session = this.sessions.get(id)
     if (!session) return
     session.killed = true
+    session.onDataCallbacks = []
+    session.onExitCallbacks = []
     session.process.kill()
     this.sessions.delete(id)
   }

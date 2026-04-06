@@ -122,11 +122,10 @@ export function App() {
 
   const handleNewTab = useCallback(async (cwd?: string) => {
     const targetCwd = cwd || (tabs.length > 0 ? tabs[tabs.length - 1].cwd : DEFAULT_CWD)
-    const cliInfo = await window.api.cli.getInfo()
 
     const result = await window.api.pty.create({
       cwd: targetCwd,
-      launchClaude: cliInfo.installed,
+      launchClaude: useAppStore.getState().cliInstalled,
       env: {
         ANTHROPIC_BASE_URL: 'https://llm.starapp.net/api/llm'
       }
@@ -352,14 +351,9 @@ export function App() {
 
     for (const file of files) {
       const filePath = window.api.fs.getPathForFile(file) || (file as any).path as string
-      if (!filePath) {
-        console.log('[Drop] file.path is empty for:', file.name)
-        continue
-      }
-      console.log('[Drop] file.path:', filePath)
+      if (!filePath) continue
       const isDir = await window.api.fs.isDirectory(filePath)
       if (isDir) {
-        console.log('[Drop] isDir=true, creating new tab')
         handleNewTab(filePath)
       } else {
         // Insert file path into active PTY — use single-quote escaping for shell safety
@@ -368,10 +362,7 @@ export function App() {
         if (tab?.ptyId) {
           const normalized = filePath.replace(/\\/g, '/')
           const escaped = `'${normalized.replace(/'/g, "'\\''")}'`
-          console.log('[Drop] writing to PTY:', escaped)
           window.api.pty.write(tab.ptyId, escaped + ' ')
-        } else {
-          console.log('[Drop] no active PTY, cannot insert path')
         }
       }
     }

@@ -113,7 +113,8 @@ export class ErrorReporter {
         signal: controller.signal,
       }).finally(() => clearTimeout(timer))
     } catch {
-      // Silent fail
+      // Re-queue for next flush attempt (cap at MAX_QUEUE_SIZE)
+      this.queue = [...batch, ...this.queue].slice(0, MAX_QUEUE_SIZE)
     } finally {
       this.flushing = false
     }

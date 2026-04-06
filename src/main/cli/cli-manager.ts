@@ -6,12 +6,11 @@ import {
   chmodSync,
   createWriteStream,
   unlinkSync,
-  readFileSync,
   writeFileSync,
   renameSync,
   copyFileSync
 } from 'fs'
-import { execSync, execFileSync } from 'child_process'
+import { execFileSync } from 'child_process'
 import { pipeline } from 'stream/promises'
 import { Readable } from 'stream'
 import { createHash } from 'crypto'
@@ -62,15 +61,19 @@ function fetchWithTimeout(
   return run()
 }
 
-function sha256File(filePath: string): string {
-  const data = readFileSync(filePath)
-  return createHash('sha256').update(data).digest('hex')
+async function sha256File(filePath: string): Promise<string> {
+  const { createReadStream } = await import('fs')
+  const hash = createHash('sha256')
+  const stream = createReadStream(filePath)
+  for await (const chunk of stream) hash.update(chunk)
+  return hash.digest('hex')
 }
 
 export class CliManager {
   private cliDir: string
   private binaryPath: string
   private _cachedInfo: CliInfo | null = null
+  private _installing = false
 
   private get markerPath(): string {
     return join(this.cliDir, '.installed')
@@ -146,6 +149,18 @@ export class CliManager {
   }
 
   async install(
+    onProgress?: (step: string, progress: number) => void
+  ): Promise<void> {
+    if (this._installing) throw new Error('Installation already in progress')
+    this._installing = true
+    try {
+      await this._doInstall(onProgress)
+    } finally {
+      this._installing = false
+    }
+  }
+
+  private async _doInstall(
     onProgress?: (step: string, progress: number) => void
   ): Promise<void> {
     if (!existsSync(this.cliDir)) {
@@ -227,7 +242,7 @@ export class CliManager {
 
     // Verify sha256 checksum
     onProgress?.('Verifying checksum...', 0.82)
-    const actual = sha256File(tmpPath)
+    const actual = await sha256File(tmpPath)
     if (actual !== platInfo.checksum) {
       unlinkSync(tmpPath)
       throw new Error(

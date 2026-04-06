@@ -204,14 +204,25 @@ export function SessionHistoryView({ onBack, onOpenInTerminal, initialSessionId 
     window.api.session.read(selectedId)
       .then((chunks) => {
         if (cancelled) return
-        for (const chunk of chunks) {
-          if (chunk.s === 'input') continue
-          term.write(chunk.d)
+        const filtered = chunks.filter(c => c.s !== 'input')
+        const BATCH_SIZE = 200
+        let i = 0
+        const writeBatch = () => {
+          if (cancelled) return
+          const end = Math.min(i + BATCH_SIZE, filtered.length)
+          for (; i < end; i++) {
+            term.write(filtered[i].d)
+          }
+          if (i < filtered.length) {
+            requestAnimationFrame(writeBatch)
+          } else {
+            requestAnimationFrame(() => safeFit(termContainerRef.current, fitAddonRef.current))
+            setLoading(false)
+          }
         }
-        requestAnimationFrame(() => safeFit(termContainerRef.current, fitAddonRef.current))
+        writeBatch()
       })
-      .catch(() => {})
-      .finally(() => { if (!cancelled) setLoading(false) })
+      .catch(() => { if (!cancelled) setLoading(false) })
 
     return () => { cancelled = true }
   }, [selectedId])

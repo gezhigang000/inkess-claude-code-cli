@@ -154,7 +154,7 @@ export function Sidebar({ onSettings, onOpenProject, onNewSession, onCommandPale
               const activeSession = sessions.find(s => s.status === 'active')
               if (activeSession) useTerminalStore.getState().setActiveTab(activeSession.id)
             } else {
-              onOpenHistory?.()
+              onOpenProject?.(cwd)
             }
           }}
           onContextMenu={(e) => { e.preventDefault(); setContextMenu({ cwd, x: e.clientX, y: e.clientY }) }}

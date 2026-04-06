@@ -36,7 +36,8 @@ export class SessionStore {
   private loadIndex(): SessionMeta[] {
     try {
       const raw = fs.readFileSync(this.indexPath(), 'utf-8')
-      return JSON.parse(raw)
+      const parsed = JSON.parse(raw)
+      return Array.isArray(parsed) ? parsed : []
     } catch {
       return []
     }
