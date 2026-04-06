@@ -16,6 +16,7 @@ const mockReadFileSync = vi.fn()
 const mockWriteFileSync = vi.fn()
 const mockMkdirSync = vi.fn()
 const mockUnlinkSync = vi.fn()
+const mockRenameSync = vi.fn()
 
 vi.mock('fs', () => ({
   existsSync: (...args: any[]) => mockExistsSync(...args),
@@ -23,6 +24,7 @@ vi.mock('fs', () => ({
   writeFileSync: (...args: any[]) => mockWriteFileSync(...args),
   mkdirSync: (...args: any[]) => mockMkdirSync(...args),
   unlinkSync: (...args: any[]) => mockUnlinkSync(...args),
+  renameSync: (...args: any[]) => mockRenameSync(...args),
 }))
 
 // Mock logger
@@ -95,9 +97,14 @@ describe('AuthManager', () => {
       new AuthManager()
 
       expect(safeStorage.encryptString).toHaveBeenCalledWith(json)
+      // Atomic write: writes to .tmp then renames
       expect(mockWriteFileSync).toHaveBeenCalledWith(
-        expect.stringContaining('session.enc'),
+        expect.stringContaining('session.enc.tmp'),
         expect.any(Buffer)
+      )
+      expect(mockRenameSync).toHaveBeenCalledWith(
+        expect.stringContaining('session.enc.tmp'),
+        expect.stringContaining('session.enc')
       )
       expect(mockUnlinkSync).toHaveBeenCalledWith(expect.stringContaining('session.json'))
     })

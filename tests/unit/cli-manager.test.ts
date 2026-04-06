@@ -16,9 +16,9 @@ vi.mock('fs', () => ({
 }))
 
 // Mock child_process
-const mockExecSync = vi.fn()
+const mockExecFileSync = vi.fn()
 vi.mock('child_process', () => ({
-  execSync: (...args: any[]) => mockExecSync(...args),
+  execFileSync: (...args: any[]) => mockExecFileSync(...args),
 }))
 
 // Mock stream/promises
@@ -54,8 +54,9 @@ describe('CliManager', () => {
     })
 
     it('returns installed with version', () => {
-      mockExistsSync.mockReturnValue(true)
-      mockExecSync.mockReturnValue('1.0.5\n')
+      // Return true for binary path, false for marker — forces version check via execFileSync
+      mockExistsSync.mockImplementation((p: string) => !String(p).endsWith('.installed'))
+      mockExecFileSync.mockReturnValue('1.0.5\n')
       const info = cli.getInfo()
       expect(info.installed).toBe(true)
       expect(info.version).toBe('1.0.5')
@@ -64,13 +65,17 @@ describe('CliManager', () => {
 
   describe('checkUpdate', () => {
     it('returns available when versions differ', async () => {
-      mockExistsSync.mockReturnValue(true)
-      mockExecSync.mockReturnValue('1.0.0\n')
+      // Force version check path (no marker)
+      mockExistsSync.mockImplementation((p: string) => !String(p).endsWith('.installed'))
+      mockExecFileSync.mockReturnValue('1.0.0\n')
+      // checkUpdate calls fetchWithTimeout which returns res.text()
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ version: '1.1.0' }),
+        text: async () => '1.1.0',
       })
-      const result = await cli.checkUpdate()
+      // Need a fresh instance to avoid cached info
+      const freshCli = new CliManager()
+      const result = await freshCli.checkUpdate()
       expect(result.available).toBe(true)
       expect(result.latestVersion).toBe('1.1.0')
     })
