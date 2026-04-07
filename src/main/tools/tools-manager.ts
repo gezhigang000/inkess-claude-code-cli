@@ -365,7 +365,7 @@ export class ToolsManager {
       const postInstall = join(this.toolsDir, 'git', 'post-install.bat')
       if (existsSync(postInstall)) {
         try {
-          execFileSync(postInstall, [], {
+          execFileSync('cmd.exe', ['/c', postInstall], {
             cwd: join(this.toolsDir, 'git'),
             timeout: 30000,
             windowsHide: true
