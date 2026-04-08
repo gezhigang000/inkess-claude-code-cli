@@ -365,10 +365,14 @@ export class ToolsManager {
       const postInstall = join(this.toolsDir, 'git', 'post-install.bat')
       if (existsSync(postInstall)) {
         try {
+          const gitDir = join(this.toolsDir, 'git')
+          const gitBin = join(gitDir, 'bin')
+          const currentPath = process.env.PATH || ''
           execFileSync('cmd.exe', ['/c', postInstall], {
-            cwd: join(this.toolsDir, 'git'),
+            cwd: gitDir,
             timeout: 30000,
-            windowsHide: true
+            windowsHide: true,
+            env: { ...process.env, PATH: `${gitBin};${gitDir};${currentPath}` }
           })
           log.info('Tools: git post-install completed')
         } catch (err) {
