@@ -1,8 +1,7 @@
 import { app } from 'electron'
 import log from './logger'
 import { readFileSync } from 'fs'
-
-const API_BASE = 'https://llm.starapp.net'
+import { buildApiUrl } from './api-url'
 const FLUSH_INTERVAL = 60_000
 const QUEUE_LIMIT = 10
 const MAX_QUEUE_SIZE = 200
@@ -67,7 +66,7 @@ export class ErrorReporter {
       const controller = new AbortController()
       const timer = setTimeout(() => controller.abort(), 30_000)
 
-      const res = await fetch(`${API_BASE}/api/llm/desktop/client-logs`, {
+      const res = await fetch(buildApiUrl('/api/llm/desktop/client-logs'), {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -101,7 +100,7 @@ export class ErrorReporter {
       const controller = new AbortController()
       const timer = setTimeout(() => controller.abort(), 10_000)
 
-      await fetch(`${API_BASE}/api/llm/desktop/client-logs`, {
+      await fetch(buildApiUrl('/api/llm/desktop/client-logs'), {
         method: 'POST',
         headers,
         body: JSON.stringify({

@@ -155,7 +155,10 @@ function BillingSection({ balance }: { balance: number }) {
           <div style={{ fontSize: 24, fontWeight: 600, color: 'var(--text-primary)' }}>¥{(balance / 100).toFixed(2)}</div>
         </div>
         <button
-          onClick={() => window.api.shell.openExternal('https://llm.starapp.net/zh/console/topup')}
+          onClick={() => {
+            const base = useSettingsStore.getState().serverUrl || 'https://llm.inkess.cc'
+            window.api.shell.openExternal(`${base}/zh/console/topup`)
+          }}
           style={{ marginTop: 12, padding: '8px 20px', background: 'var(--accent)', color: 'var(--accent-text)', border: 'none', borderRadius: 6, fontSize: 13, cursor: 'pointer' }}
         >
           {t('settings.topUp')}

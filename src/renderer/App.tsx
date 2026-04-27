@@ -123,11 +123,14 @@ export function App() {
   const handleNewTab = useCallback(async (cwd?: string) => {
     const targetCwd = cwd || (tabs.length > 0 ? tabs[tabs.length - 1].cwd : DEFAULT_CWD)
 
+    const serverUrl = useSettingsStore.getState().serverUrl
+    const apiBase = serverUrl || 'https://llm.inkess.cc'
+
     const result = await window.api.pty.create({
       cwd: targetCwd,
       launchClaude: useAppStore.getState().cliInstalled,
       env: {
-        ANTHROPIC_BASE_URL: 'https://llm.starapp.net/api/llm'
+        ANTHROPIC_BASE_URL: `${apiBase}/api/llm`
       }
     })
 

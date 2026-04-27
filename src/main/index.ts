@@ -13,6 +13,7 @@ import { SessionRecorder } from './session/session-recorder'
 import { SessionStore } from './session/session-store'
 import { mkdirSync, statSync, writeFileSync, readdirSync, unlinkSync, existsSync } from 'fs'
 import { execFileSync } from 'child_process'
+import { getApiBase, setApiBase } from './api-url'
 
 process.on('uncaughtException', (err) => log.error('Uncaught:', err))
 process.on('unhandledRejection', (reason) => log.error('Unhandled:', reason))
@@ -146,6 +147,23 @@ ipcMain.handle('auth:getBalance', async () => {
 
 ipcMain.handle('auth:hasToken', () => {
   return authManager.getToken() !== null
+})
+
+ipcMain.handle('auth:getApiBase', () => getApiBase())
+
+ipcMain.handle('auth:setApiBase', (_event, base: unknown) => {
+  if (base !== null && base !== undefined && typeof base !== 'string') {
+    return { success: false, error: 'Invalid input' }
+  }
+  if (typeof base === 'string' && base.length > 200) {
+    return { success: false, error: 'Server URL too long' }
+  }
+  try {
+    setApiBase(typeof base === 'string' ? base : null)
+    return { success: true, base: getApiBase() }
+  } catch (err) {
+    return { success: false, error: (err as Error).message }
+  }
 })
 
 ipcMain.handle('auth:autoLogin', async () => {
@@ -465,7 +483,7 @@ app.whenReady().then(() => {
           ...details.responseHeaders,
           'Content-Security-Policy': [
             "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
-            "connect-src https://llm.starapp.net https://inkess-install-file.oss-cn-beijing.aliyuncs.com; " +
+            "connect-src https://*.inkess.cc https://*.inkessai.com https://*.starapp.net https://inkess-install-file.oss-cn-beijing.aliyuncs.com; " +
             "font-src 'self'; img-src 'self' data:;"
           ]
         }

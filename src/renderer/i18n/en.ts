@@ -41,6 +41,10 @@ export const en = {
   'login.creatingAccount': 'Creating account...',
   'login.createAccount': 'Create Account',
   'login.registrationFailed': 'Registration failed',
+  'login.serverLabel': 'Server URL',
+  'login.serverEdit': 'Edit',
+  'login.serverInvalid': 'Server URL must start with http:// or https://',
+  'login.serverReset': 'Use default',
 
   // Setup
   'setup.checking': 'Checking environment...',

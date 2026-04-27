@@ -2,8 +2,7 @@ import { app, safeStorage } from 'electron'
 import { join } from 'path'
 import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, renameSync } from 'fs'
 import log from '../logger'
-
-const API_BASE = 'https://llm.starapp.net'
+import { buildApiUrl } from '../api-url'
 
 function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 15000): Promise<Response> {
   const controller = new AbortController()
@@ -192,7 +191,7 @@ export class AuthManager {
   async login(login: string, password: string): Promise<{ success: boolean; error?: string; errorCode?: string }> {
     try {
       log.info(`Auth: login attempt for ${login}`)
-      const res = await fetchWithTimeout(`${API_BASE}/api/llm/desktop/login`, {
+      const res = await fetchWithTimeout(buildApiUrl('/api/llm/desktop/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ login, password })
@@ -201,7 +200,7 @@ export class AuthManager {
       if (!res.ok) {
         const data = await res.json().catch(() => ({})) as { message?: string; errorCode?: string }
         if (data.errorCode === 'desktop_token_disabled') {
-          return { success: false, error: 'System token is disabled. Please enable it at llm.starapp.net → Console → Tokens', errorCode: data.errorCode }
+          return { success: false, error: 'System token is disabled. Please enable it in Console → Tokens', errorCode: data.errorCode }
         }
         return { success: false, error: data.message || httpErrorMessage(res.status, 'Login'), errorCode: data.errorCode }
       }
@@ -222,7 +221,7 @@ export class AuthManager {
       if (username) body.username = username
       if (referralCode) body.referralCode = referralCode
 
-      const res = await fetchWithTimeout(`${API_BASE}/api/llm/desktop/register`, {
+      const res = await fetchWithTimeout(buildApiUrl('/api/llm/desktop/register'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
@@ -245,7 +244,7 @@ export class AuthManager {
 
   async sendCode(email: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/api/llm/desktop/send-code`, {
+      const res = await fetchWithTimeout(buildApiUrl('/api/llm/desktop/send-code'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email })
@@ -264,7 +263,7 @@ export class AuthManager {
 
   async forgotPassword(email: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/api/llm/desktop/forgot-password`, {
+      const res = await fetchWithTimeout(buildApiUrl('/api/llm/desktop/forgot-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email })
@@ -286,7 +285,7 @@ export class AuthManager {
     if (!token) return { success: false, error: 'Not logged in' }
 
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/api/llm/desktop/change-password`, {
+      const res = await fetchWithTimeout(buildApiUrl('/api/llm/desktop/change-password'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -319,7 +318,7 @@ export class AuthManager {
       if (!token) return { balance: 0, error: 'Not logged in' }
 
       try {
-        const res = await fetchWithTimeout(`${API_BASE}/api/llm/desktop/me`, {
+        const res = await fetchWithTimeout(buildApiUrl('/api/llm/desktop/me'), {
           headers: { Authorization: `Bearer ${token}` }
         })
 
@@ -354,7 +353,7 @@ export class AuthManager {
 
     log.info('Auth: attempting auto-login with saved credentials')
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/api/llm/desktop/login`, {
+      const res = await fetchWithTimeout(buildApiUrl('/api/llm/desktop/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ login: creds.login, password: creds.password })

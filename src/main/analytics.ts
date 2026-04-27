@@ -1,7 +1,6 @@
 import { app } from 'electron'
 import log from './logger'
-
-const API_BASE = 'https://llm.starapp.net'
+import { buildApiUrl } from './api-url'
 const FLUSH_INTERVAL = 60_000
 const QUEUE_LIMIT = 20
 const MAX_QUEUE_SIZE = 500
@@ -45,7 +44,7 @@ export class Analytics {
       const controller = new AbortController()
       const timer = setTimeout(() => controller.abort(), 10_000)
 
-      await fetch(`${API_BASE}/api/llm/desktop/events`, {
+      await fetch(buildApiUrl('/api/llm/desktop/events'), {
         method: 'POST',
         headers,
         body: JSON.stringify({

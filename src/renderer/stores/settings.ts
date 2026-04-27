@@ -17,6 +17,7 @@ interface SettingsState {
   notificationsEnabled: boolean
   notificationSound: boolean
   sleepInhibitorEnabled: boolean
+  serverUrl: string
 
   setFontSize: (v: number) => void
   setIdeChoice: (v: string) => void
@@ -25,6 +26,7 @@ interface SettingsState {
   setNotificationsEnabled: (v: boolean) => void
   setNotificationSound: (v: boolean) => void
   setSleepInhibitorEnabled: (v: boolean) => void
+  setServerUrl: (v: string) => void
 }
 
 function loadSettings(): Partial<SettingsState> {
@@ -46,6 +48,7 @@ function persistSettings(state: SettingsState) {
       notificationsEnabled: state.notificationsEnabled,
       notificationSound: state.notificationSound,
       sleepInhibitorEnabled: state.sleepInhibitorEnabled,
+      serverUrl: state.serverUrl,
     }))
   } catch { /* ignore */ }
 }
@@ -76,6 +79,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   notificationsEnabled: typeof (saved as any).notificationsEnabled === 'boolean' ? (saved as any).notificationsEnabled : true,
   notificationSound: typeof (saved as any).notificationSound === 'boolean' ? (saved as any).notificationSound : true,
   sleepInhibitorEnabled: typeof (saved as any).sleepInhibitorEnabled === 'boolean' ? (saved as any).sleepInhibitorEnabled : true,
+  serverUrl: typeof (saved as any).serverUrl === 'string' ? (saved as any).serverUrl : '',
 
   // Each setter: set() first (synchronous), then persist the full post-set state
   // This avoids the race where get() returns stale pre-set values
@@ -90,7 +94,21 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     persistSettings(get())
     window.api?.power?.setSleepInhibitorEnabled(v)
   },
+  setServerUrl: (v) => {
+    set({ serverUrl: v })
+    persistSettings(get())
+    window.api?.auth?.setApiBase(v || null)
+  },
 }))
 
 // Apply theme on load
 applyTheme(validatedTheme)
+
+// Sync persisted server URL override to main process so API calls
+// hit the user-configured host before the first login attempt.
+setTimeout(() => {
+  const { serverUrl } = useSettingsStore.getState()
+  if (serverUrl) {
+    window.api?.auth?.setApiBase(serverUrl)
+  }
+}, 0)

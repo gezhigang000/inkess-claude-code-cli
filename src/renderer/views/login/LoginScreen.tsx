@@ -1,5 +1,12 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useI18n } from '../../i18n'
+import { useSettingsStore } from '../../stores/settings'
+
+const DEFAULT_SERVER_URL = 'https://llm.inkess.cc'
+
+function getServerBase(): string {
+  return useSettingsStore.getState().serverUrl || DEFAULT_SERVER_URL
+}
 
 interface LoginScreenProps {
   onLoginSuccess: () => void
@@ -13,6 +20,30 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   const [errorCode, setErrorCode] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const { t } = useI18n()
+  const serverUrl = useSettingsStore(s => s.serverUrl)
+  const setServerUrl = useSettingsStore(s => s.setServerUrl)
+  const [serverEditing, setServerEditing] = useState(false)
+  const [serverDraft, setServerDraft] = useState(serverUrl || DEFAULT_SERVER_URL)
+  const [serverError, setServerError] = useState<string | null>(null)
+  const effectiveServerUrl = serverUrl || DEFAULT_SERVER_URL
+
+  const commitServerUrl = () => {
+    const trimmed = serverDraft.trim()
+    if (trimmed && trimmed !== DEFAULT_SERVER_URL && !/^https?:\/\/[^\s]+$/.test(trimmed)) {
+      setServerError(t('login.serverInvalid'))
+      return
+    }
+    setServerError(null)
+    setServerUrl(trimmed === DEFAULT_SERVER_URL ? '' : trimmed)
+    setServerEditing(false)
+  }
+
+  const resetServerUrl = () => {
+    setServerError(null)
+    setServerDraft(DEFAULT_SERVER_URL)
+    setServerUrl('')
+    setServerEditing(false)
+  }
 
   return (
     <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)', overflowY: 'auto' }}>
@@ -28,6 +59,81 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
             {tab === 'login' ? t('login.signInSubtitle') : t('login.registerSubtitle')}
           </p>
+        </div>
+
+        {/* Server URL — collapsible */}
+        <div style={{ textAlign: 'left', marginBottom: 16 }}>
+          {!serverEditing ? (
+            <div
+              style={{
+                fontSize: 12, color: 'var(--text-muted)',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                gap: 8, padding: '6px 2px',
+              }}
+            >
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {t('login.serverLabel')}: {effectiveServerUrl}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setServerDraft(serverUrl || DEFAULT_SERVER_URL)
+                  setServerEditing(true)
+                  setServerError(null)
+                }}
+                style={{
+                  fontSize: 12, color: 'var(--accent)', background: 'transparent',
+                  border: 'none', cursor: 'pointer', padding: 0, flexShrink: 0,
+                }}
+              >
+                {t('login.serverEdit')}
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                {t('login.serverLabel')}
+              </label>
+              <FocusInput
+                value={serverDraft}
+                onChange={e => setServerDraft(e.target.value)}
+                placeholder={DEFAULT_SERVER_URL}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') commitServerUrl()
+                  else if (e.key === 'Escape') {
+                    setServerEditing(false)
+                    setServerError(null)
+                  }
+                }}
+                style={{ fontSize: 13 }}
+              />
+              {serverError && (
+                <div style={{ fontSize: 12, color: 'var(--error-text)' }}>{serverError}</div>
+              )}
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={resetServerUrl}
+                  style={{
+                    fontSize: 12, color: 'var(--text-muted)', background: 'transparent',
+                    border: 'none', cursor: 'pointer', padding: 0,
+                  }}
+                >
+                  {t('login.serverReset')}
+                </button>
+                <button
+                  type="button"
+                  onClick={commitServerUrl}
+                  style={{
+                    fontSize: 12, color: 'var(--accent)', background: 'transparent',
+                    border: 'none', cursor: 'pointer', padding: 0,
+                  }}
+                >
+                  OK
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Tab switcher */}
@@ -56,7 +162,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
               <div style={{ marginTop: 8 }}>
                 <a
                   href="#"
-                  onClick={(e) => { e.preventDefault(); window.api.shell.openExternal('https://llm.starapp.net/zh/console/tokens') }}
+                  onClick={(e) => { e.preventDefault(); window.api.shell.openExternal(`${getServerBase()}/zh/console/tokens`) }}
                   style={{ color: 'var(--accent)', textDecoration: 'underline', cursor: 'pointer', fontSize: 12 }}
                 >
                   Go to Console → Tokens
@@ -149,8 +255,8 @@ function LoginForm({ onSuccess, onError, onErrorCode }: { onSuccess: () => void;
           href="#"
           role="link"
           tabIndex={0}
-          onClick={(e) => { e.preventDefault(); window.api.shell.openExternal('https://llm.starapp.net/zh/console/forgot-password') }}
-          onKeyDown={(e) => { if (e.key === 'Enter') window.api.shell.openExternal('https://llm.starapp.net/zh/console/forgot-password') }}
+          onClick={(e) => { e.preventDefault(); window.api.shell.openExternal(`${getServerBase()}/zh/console/forgot-password`) }}
+          onKeyDown={(e) => { if (e.key === 'Enter') window.api.shell.openExternal(`${getServerBase()}/zh/console/forgot-password`) }}
           style={{ fontSize: 12, color: 'var(--accent)', cursor: 'pointer', textDecoration: 'none' }}
         >
           {t('login.forgotPassword')}

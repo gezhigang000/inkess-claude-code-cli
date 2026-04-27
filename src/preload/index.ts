@@ -31,6 +31,11 @@ const api = {
       balance: number; error?: string
     }>,
     hasToken: () => ipcRenderer.invoke('auth:hasToken') as Promise<boolean>,
+    getApiBase: () => ipcRenderer.invoke('auth:getApiBase') as Promise<string>,
+    setApiBase: (base: string | null) =>
+      ipcRenderer.invoke('auth:setApiBase', base) as Promise<{
+        success: boolean; base?: string; error?: string
+      }>,
     autoLogin: () => ipcRenderer.invoke('auth:autoLogin') as Promise<{
       success: boolean; user: { id: number; email: string; username: string; balance: number } | null
     }>

@@ -43,6 +43,10 @@ export const zh: Record<TranslationKey, string> = {
   'login.creatingAccount': '创建中...',
   'login.createAccount': '创建账号',
   'login.registrationFailed': '注册失败',
+  'login.serverLabel': '服务器地址',
+  'login.serverEdit': '编辑',
+  'login.serverInvalid': '服务器地址必须以 http:// 或 https:// 开头',
+  'login.serverReset': '恢复默认',
 
   // Setup
   'setup.checking': '检查环境中...',
