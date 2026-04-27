@@ -18,7 +18,7 @@ import * as os from 'os'
 import log from '../logger'
 
 const MIRROR_BASE_URL =
-  'https://inkess-install-file.oss-cn-beijing.aliyuncs.com/cli-mirror'
+  'https://inkess-app.oss-ap-northeast-1.aliyuncs.com/cli-mirror'
 
 interface Manifest {
   version: string

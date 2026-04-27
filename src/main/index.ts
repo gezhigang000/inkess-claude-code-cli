@@ -483,7 +483,7 @@ app.whenReady().then(() => {
           ...details.responseHeaders,
           'Content-Security-Policy': [
             "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
-            "connect-src https://*.inkess.cc https://*.inkessai.com https://*.starapp.net https://inkess-install-file.oss-cn-beijing.aliyuncs.com; " +
+            "connect-src https://*.inkess.cc https://*.inkessai.com https://*.starapp.net https://inkess-app.oss-ap-northeast-1.aliyuncs.com; " +
             "font-src 'self'; img-src 'self' data:;"
           ]
         }
